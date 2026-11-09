@@ -3,18 +3,9 @@
   "theme": "mint",
   "name": "Bonya",
   "colors": {
-    "primary": "#c6f24e",
-    "light": "#c6f24e",
-    "dark": "#9bbf3a"
-  },
-  "background": {
-    "color": {
-      "light": "#ffffff",
-      "dark": "#08090b"
-    }
-  },
-  "appearance": {
-    "default": "dark"
+    "primary": "#16A34A",
+    "light": "#07C983",
+    "dark": "#15803D"
   },
   "favicon": "/favicon.svg",
   "logo": {
@@ -23,15 +14,42 @@
     "href": "https://bonya.ai"
   },
   "redirects": [
-    { "source": "/concepts/nests", "destination": "/concepts/sandboxes" },
-    { "source": "/concepts/holds", "destination": "/concepts/sandboxes" },
-    { "source": "/guides/keepalive-holds", "destination": "/concepts/sandboxes" },
-    { "source": "/guides/billing", "destination": "/concepts/organizations" },
-    { "source": "/guides/snapshot-and-fork", "destination": "/guides/snapshot-a-sandbox" },
-    { "source": "/cli-reference/lifecycle", "destination": "/cli-reference/sandboxes" },
-    { "source": "/cli-reference/everyday", "destination": "/cli-reference/sandboxes" },
-    { "source": "/cli-reference/data", "destination": "/cli-reference/fs" },
-    { "source": "/cli-reference/sessions", "destination": "/cli-reference/session" }
+    {
+      "source": "/concepts/nests",
+      "destination": "/concepts/sandboxes"
+    },
+    {
+      "source": "/concepts/holds",
+      "destination": "/concepts/sandboxes"
+    },
+    {
+      "source": "/guides/keepalive-holds",
+      "destination": "/concepts/sandboxes"
+    },
+    {
+      "source": "/guides/billing",
+      "destination": "/concepts/organizations"
+    },
+    {
+      "source": "/guides/snapshot-and-fork",
+      "destination": "/guides/snapshot-a-sandbox"
+    },
+    {
+      "source": "/cli-reference/lifecycle",
+      "destination": "/cli-reference/sandboxes"
+    },
+    {
+      "source": "/cli-reference/everyday",
+      "destination": "/cli-reference/sandboxes"
+    },
+    {
+      "source": "/cli-reference/data",
+      "destination": "/cli-reference/fs"
+    },
+    {
+      "source": "/cli-reference/sessions",
+      "destination": "/cli-reference/session"
+    }
   ],
   "navigation": {
     "tabs": [
@@ -40,7 +58,11 @@
         "groups": [
           {
             "group": "Get started",
-            "pages": ["index", "quickstart", "authentication"]
+            "pages": [
+              "index",
+              "quickstart",
+              "authentication"
+            ]
           },
           {
             "group": "Tutorials",
@@ -67,7 +89,11 @@
           },
           {
             "group": "API essentials",
-            "pages": ["concepts/errors", "concepts/idempotency", "concepts/websockets"]
+            "pages": [
+              "concepts/errors",
+              "concepts/idempotency",
+              "concepts/websockets"
+            ]
           },
           {
             "group": "Guides",
@@ -87,15 +113,24 @@
         "groups": [
           {
             "group": "Overview",
-            "pages": ["cli-reference/overview", "cli-reference/configuration"]
+            "pages": [
+              "cli-reference/overview",
+              "cli-reference/configuration"
+            ]
           },
           {
             "group": "Getting started",
-            "pages": ["cli-reference/login", "cli-reference/console", "cli-reference/create"]
+            "pages": [
+              "cli-reference/login",
+              "cli-reference/console",
+              "cli-reference/create"
+            ]
           },
           {
             "group": "Sandboxes",
-            "pages": ["cli-reference/sandboxes"]
+            "pages": [
+              "cli-reference/sandboxes"
+            ]
           },
           {
             "group": "Inside a sandbox",
@@ -108,7 +143,10 @@
           },
           {
             "group": "Account",
-            "pages": ["cli-reference/org", "cli-reference/account"]
+            "pages": [
+              "cli-reference/org",
+              "cli-reference/account"
+            ]
           }
         ]
       },
@@ -117,15 +155,24 @@
         "groups": [
           {
             "group": "TypeScript",
-            "pages": ["sdks/typescript/installation", "sdks/typescript/usage"]
+            "pages": [
+              "sdks/typescript/installation",
+              "sdks/typescript/usage"
+            ]
           },
           {
             "group": "Python",
-            "pages": ["sdks/python/installation", "sdks/python/usage"]
+            "pages": [
+              "sdks/python/installation",
+              "sdks/python/usage"
+            ]
           },
           {
             "group": "Go",
-            "pages": ["sdks/go/installation", "sdks/go/usage"]
+            "pages": [
+              "sdks/go/installation",
+              "sdks/go/usage"
+            ]
           }
         ]
       },
@@ -134,7 +181,11 @@
         "groups": [
           {
             "group": "MCP Server",
-            "pages": ["mcp/overview", "mcp/setup", "mcp/tools"]
+            "pages": [
+              "mcp/overview",
+              "mcp/setup",
+              "mcp/tools"
+            ]
           }
         ]
       },
