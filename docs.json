@@ -198,8 +198,8 @@
     ],
     "primary": {
       "type": "button",
-      "label": "Dashboard",
-      "href": "https://bonya.ai/login"
+      "label": "Console",
+      "href": "https://console.bonya.ai"
     }
   },
   "footer": {
