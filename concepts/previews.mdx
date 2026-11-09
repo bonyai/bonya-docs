@@ -9,14 +9,14 @@ A **preview** exposes a port inside a sandbox as an HTTPS URL, so you can view a
 
 <CodeGroup>
 ```shell cURL
-curl -s -X POST "https://api.tyto.run/v1/sandbox/$SANDBOX_ID/previews" \
+curl -s -X POST "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/previews" \
   -H "Authorization: Bearer $BONYA_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"port": 3000, "name": "web"}'
 ```
 
 ```shell CLI
-tyto preview create $SANDBOX_ID 3000 --name web
+bonya preview create $SANDBOX_ID 3000 --name web
 ```
 
 ```ts TypeScript
@@ -30,7 +30,7 @@ print(preview.url)
 ```
 
 ```go Go
-preview, err := sandbox.CreatePreview(ctx, 3000, tyto.CreatePreviewOptions{Name: "web"})
+preview, err := sandbox.CreatePreview(ctx, 3000, bonya.CreatePreviewOptions{Name: "web"})
 fmt.Println(preview.URL)
 ```
 </CodeGroup>
@@ -124,12 +124,12 @@ Open it once and let the cookie carry the session — the URL itself should not 
 
 <CodeGroup>
 ```shell cURL
-curl -s "https://api.tyto.run/v1/sandbox/$SANDBOX_ID/previews" \
+curl -s "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/previews" \
   -H "Authorization: Bearer $BONYA_API_KEY"
 ```
 
 ```shell CLI
-tyto preview list $SANDBOX_ID
+bonya preview list $SANDBOX_ID
 ```
 
 ```ts TypeScript
@@ -153,12 +153,12 @@ Returns `PreviewListResponse`: `{ "previews": [ ...Preview ] }`. As noted above,
 
 <CodeGroup>
 ```shell cURL
-curl -s -X DELETE "https://api.tyto.run/v1/sandbox/$SANDBOX_ID/previews/$PREVIEW_ID" \
+curl -s -X DELETE "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/previews/$PREVIEW_ID" \
   -H "Authorization: Bearer $BONYA_API_KEY"
 ```
 
 ```shell CLI
-tyto preview delete $SANDBOX_ID $PREVIEW_ID
+bonya preview delete $SANDBOX_ID $PREVIEW_ID
 ```
 
 ```ts TypeScript

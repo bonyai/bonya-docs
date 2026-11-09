@@ -19,40 +19,40 @@ Your personal organization is always available and needs no setup. Everything in
 Creating, renaming, and reading organizations; listing, changing the role of, or removing members; and inviting people all require a Supabase session JWT. A personal API key (`byk_`) is **rejected outright** on every one of these operations, even one belonging to the organization's own owner.
 </Warning>
 
-This is a deliberate split, not a gap: these are dashboard-facing operations where a signed-in browser session is doing the asking, not an automated client. If you're setting up a team — creating the organization, inviting members, changing roles — that all happens by signing into the Tyto dashboard, not by scripting it with an API key. See [Organizations](/concepts/organizations#administration-is-jwt-only) for why the split exists and exactly which operations it covers.
+This is a deliberate split, not a gap: these are dashboard-facing operations where a signed-in browser session is doing the asking, not an automated client. If you're setting up a team — creating the organization, inviting members, changing roles — that all happens by signing into the Bonya dashboard, not by scripting it with an API key. See [Organizations](/concepts/organizations#administration-is-jwt-only) for why the split exists and exactly which operations it covers.
 
 What an API key *can* do is select which organization its calls run against, once you're already a member of one. That's the rest of this guide.
 
 ## Using an organization from the CLI
 
-`tyto org` controls which organization your commands act in by default, so you don't have to pass `--organization-id` on every command:
+`bonya org` controls which organization your commands act in by default, so you don't have to pass `--organization-id` on every command:
 
 <CodeGroup>
 ```shell List
-tyto org list
+bonya org list
 ```
 
 ```shell Switch
-tyto org use Acme
+bonya org use Acme
 ```
 
 ```shell Show current
-tyto org show
+bonya org show
 ```
 
 ```shell Reset to personal
-tyto org clear
+bonya org clear
 ```
 </CodeGroup>
 
-`tyto org list` prints a table of organizations you belong to, marking the current one. `tyto org use <name-or-id>` saves an organization as the default for future commands — omit the argument to pick from an interactive list. The value saved to disk is always resolved to an id, never a name, since a name can be renamed out from under a saved selection but an id can't.
+`bonya org list` prints a table of organizations you belong to, marking the current one. `bonya org use <name-or-id>` saves an organization as the default for future commands — omit the argument to pick from an interactive list. The value saved to disk is always resolved to an id, never a name, since a name can be renamed out from under a saved selection but an id can't.
 
 ```shell
-tyto org use Acme
-tyto list   # now scoped to Acme with no flag needed
+bonya org use Acme
+bonya list   # now scoped to Acme with no flag needed
 ```
 
-`tyto org show` reports what's currently in effect and where it came from (flag, environment variable, or saved selection) — useful when you're not sure which org a command is about to hit. `tyto org clear` removes the saved selection and falls back to your personal organization.
+`bonya org show` reports what's currently in effect and where it came from (flag, environment variable, or saved selection) — useful when you're not sure which org a command is about to hit. `bonya org clear` removes the saved selection and falls back to your personal organization.
 
 <Note>
 A saved `org use` selection wins only while you're still a member of that organization. If you're removed, commands silently fall back to your personal organization rather than erroring.
@@ -68,16 +68,16 @@ export BONYA_ORGANIZATION_ID=org-4f1c9a2b3c4d5e6f7a8b9c0d1e2f3a4b
 ```
 
 ```ts TypeScript
-const client = new Tyto({ organizationId: "org-4f1c9a2b3c4d5e6f7a8b9c0d1e2f3a4b" });
+const client = new Bonya({ organizationId: "org-4f1c9a2b3c4d5e6f7a8b9c0d1e2f3a4b" });
 ```
 
 ```python Python
-client = Tyto(organization_id="org-4f1c9a2b3c4d5e6f7a8b9c0d1e2f3a4b")
+client = Bonya(organization_id="org-4f1c9a2b3c4d5e6f7a8b9c0d1e2f3a4b")
 ```
 
 ```go Go
-client, err := tyto.NewClient(
-	tyto.WithOrganizationID("org-4f1c9a2b3c4d5e6f7a8b9c0d1e2f3a4b"),
+client, err := bonya.NewClient(
+	bonya.WithOrganizationID("org-4f1c9a2b3c4d5e6f7a8b9c0d1e2f3a4b"),
 )
 ```
 </CodeGroup>
@@ -99,7 +99,7 @@ X-Bonya-Organization-ID: <organization_id>
 - **Well-formed but you're not a member** — `404`, not `403` (the API doesn't confirm an organization exists to a non-member).
 
 ```shell
-curl -s https://api.tyto.run/v1/sandbox \
+curl -s https://api.bonya.ai/v1/sandbox \
   -H "Authorization: Bearer $BONYA_API_KEY" \
   -H "X-Bonya-Organization-ID: org-4f1c9a2b3c4d5e6f7a8b9c0d1e2f3a4b"
 ```

@@ -5,13 +5,13 @@ description: Remote filesystem operations on a sandbox — read, write, upload, 
 
 import { TerminalOutput } from "/snippets/terminal-output.jsx";
 
-## `tyto fs`
+## `bonya fs`
 
 Reads and writes files inside a sandbox. Every subcommand names its sandbox by name or id, interchangeably, and omitting it opens a picker:
 
 ```shell
-tyto fs ls web /workspace
-tyto fs ls /workspace        # prompts for the sandbox
+bonya fs ls web /workspace
+bonya fs ls /workspace        # prompts for the sandbox
 ```
 
 All nine subcommands accept `--by-name` to force name interpretation of the sandbox argument.
@@ -21,12 +21,12 @@ All nine subcommands accept `--by-name` to force name interpretation of the sand
 Prints a remote file to stdout.
 
 ```shell
-tyto fs read [sandbox] <path>
+bonya fs read [sandbox] <path>
 ```
 
 ```shell
-tyto fs read web /etc/hostname
-tyto fs cat web /etc/hostname
+bonya fs read web /etc/hostname
+bonya fs cat web /etc/hostname
 ```
 
 ## `write`
@@ -34,7 +34,7 @@ tyto fs cat web /etc/hostname
 Writes a local file — or stdin, with `-` — to a remote path.
 
 ```shell
-tyto fs write [sandbox] <path> <local-file-or-->
+bonya fs write [sandbox] <path> <local-file-or-->
 ```
 
 <Warning>
@@ -43,11 +43,11 @@ Argument order is **remote path, then local source** — the opposite order from
 
 <CodeGroup>
 ```shell From a local file
-tyto fs write web /workspace/notes.txt ./notes.txt
+bonya fs write web /workspace/notes.txt ./notes.txt
 ```
 
 ```shell From stdin
-echo 'hello' | tyto fs write web /workspace/hello.txt -
+echo 'hello' | bonya fs write web /workspace/hello.txt -
 ```
 </CodeGroup>
 
@@ -56,11 +56,11 @@ echo 'hello' | tyto fs write web /workspace/hello.txt -
 Uploads a local file to a remote path. Source, then destination — the familiar order.
 
 ```shell
-tyto fs upload [sandbox] <local> <remote>
+bonya fs upload [sandbox] <local> <remote>
 ```
 
 ```shell
-tyto fs upload web ./dist.tar.gz /workspace/dist.tar.gz
+bonya fs upload web ./dist.tar.gz /workspace/dist.tar.gz
 ```
 
 ## `download`
@@ -68,11 +68,11 @@ tyto fs upload web ./dist.tar.gz /workspace/dist.tar.gz
 Downloads a remote file to a local path.
 
 ```shell
-tyto fs download [sandbox] <remote> <local>
+bonya fs download [sandbox] <remote> <local>
 ```
 
 ```shell
-tyto fs download web /workspace/output.log ./output.log
+bonya fs download web /workspace/output.log ./output.log
 ```
 
 ## `ls`
@@ -80,14 +80,14 @@ tyto fs download web /workspace/output.log ./output.log
 Lists a remote directory.
 
 ```shell
-tyto fs ls [sandbox] <path>
+bonya fs ls [sandbox] <path>
 ```
 
 ```shell
-tyto fs ls web /workspace
+bonya fs ls web /workspace
 ```
 
-On a real terminal, `tyto fs ls` looks like this:
+On a real terminal, `bonya fs ls` looks like this:
 
 <TerminalOutput lines={[
   [{text: "┌─────────────────────────────────────────────────────┐", color: "#444444"}],
@@ -104,11 +104,11 @@ On a real terminal, `tyto fs ls` looks like this:
 Shows metadata (kind, size, mode, modified time) for a remote path.
 
 ```shell
-tyto fs stat [sandbox] <path>
+bonya fs stat [sandbox] <path>
 ```
 
 ```shell
-tyto fs stat web /workspace/app.py
+bonya fs stat web /workspace/app.py
 ```
 
 ## `mkdir`
@@ -116,11 +116,11 @@ tyto fs stat web /workspace/app.py
 Creates a remote directory.
 
 ```shell
-tyto fs mkdir [sandbox] <path>
+bonya fs mkdir [sandbox] <path>
 ```
 
 ```shell
-tyto fs mkdir web /workspace/logs
+bonya fs mkdir web /workspace/logs
 ```
 
 ## `rm`
@@ -128,7 +128,7 @@ tyto fs mkdir web /workspace/logs
 Removes a remote file or directory.
 
 ```shell
-tyto fs rm [sandbox] <path> [--recursive]
+bonya fs rm [sandbox] <path> [--recursive]
 ```
 
 | Flag | Default | Description |
@@ -136,8 +136,8 @@ tyto fs rm [sandbox] <path> [--recursive]
 | `--recursive` | `false` | Remove directories recursively. |
 
 ```shell
-tyto fs rm web /workspace/tmp.txt
-tyto fs rm web /workspace/build --recursive
+bonya fs rm web /workspace/tmp.txt
+bonya fs rm web /workspace/build --recursive
 ```
 
 ## `mv`
@@ -145,11 +145,11 @@ tyto fs rm web /workspace/build --recursive
 Moves (renames) a remote file or directory.
 
 ```shell
-tyto fs mv [sandbox] <src> <dst>
+bonya fs mv [sandbox] <src> <dst>
 ```
 
 ```shell
-tyto fs mv web /workspace/draft.md /workspace/final.md
+bonya fs mv web /workspace/draft.md /workspace/final.md
 ```
 
 ## All subcommands at a glance

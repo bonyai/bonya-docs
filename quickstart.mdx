@@ -11,17 +11,17 @@ This walks through the smallest possible loop: get a key, create a sandbox, run 
 
     <CodeGroup>
     ```shell Homebrew
-    brew install bonyai/tap/tyto
-    tyto login
+    brew install bonyai/tap/bonya
+    bonya login
     ```
 
     ```shell Install script
-    curl -fsSL https://get.tyto.run/install.sh | sh
-    tyto login
+    curl -fsSL https://get.bonya.ai/install.sh | sh
+    bonya login
     ```
     </CodeGroup>
 
-    See [Authentication](/authentication) for exactly what `tyto login` does under the hood, and how to mint a key without it. Once you have a key, export it — the CLI and every SDK read this variable by default:
+    See [Authentication](/authentication) for exactly what `bonya login` does under the hood, and how to mint a key without it. Once you have a key, export it — the CLI and every SDK read this variable by default:
 
     ```bash
     export BONYA_API_KEY=byk_...
@@ -32,15 +32,15 @@ This walks through the smallest possible loop: get a key, create a sandbox, run 
 
     <CodeGroup>
     ```bash TypeScript
-    npm install @bonya-ai/tyto
+    npm install @bonya-ai/bonya
     ```
 
     ```bash Python
-    python -m pip install tyto.run
+    python -m pip install bonya
     ```
 
     ```bash Go
-    go get github.com/bonyai/tyto-go
+    go get github.com/bonyai/bonya-sdk-go
     ```
     </CodeGroup>
   </Step>
@@ -49,34 +49,34 @@ This walks through the smallest possible loop: get a key, create a sandbox, run 
 
     <CodeGroup>
     ```shell cURL
-    curl -s -X POST "https://api.tyto.run/v1/sandbox?wait=ready" \
+    curl -s -X POST "https://api.bonya.ai/v1/sandbox?wait=ready" \
       -H "Authorization: Bearer $BONYA_API_KEY" \
       -H "Content-Type: application/json" \
       -d '{"template_id": "bonya-dev"}'
     ```
 
     ```shell CLI
-    tyto create --template bonya-dev
+    bonya create --template bonya-dev
     ```
 
     ```ts TypeScript
-    import { Tyto } from "@bonya-ai/tyto";
+    import { Bonya } from "@bonya-ai/bonya";
 
-    const client = new Tyto();
+    const client = new Bonya();
     const sandbox = await client.createSandbox({ template: "bonya-dev" });
     console.log(sandbox.id);
     ```
 
     ```python Python
-    from tyto import Tyto
+    from bonya import Bonya
 
-    with Tyto() as client:
+    with Bonya() as client:
         sandbox = client.create_sandbox(template="bonya-dev")
         print(sandbox.id)
     ```
 
     ```go Go
-    client, err := tyto.NewClient()
+    client, err := bonya.NewClient()
     if err != nil {
         log.Fatal(err)
     }
@@ -98,28 +98,28 @@ This walks through the smallest possible loop: get a key, create a sandbox, run 
 
     <CodeGroup>
     ```shell cURL
-    curl -s -X POST "https://api.tyto.run/v1/sandbox/$SANDBOX_ID/exec" \
+    curl -s -X POST "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/exec" \
       -H "Authorization: Bearer $BONYA_API_KEY" \
       -H "Content-Type: application/json" \
-      -d '{"cmd": ["echo", "hello from tyto"]}'
+      -d '{"cmd": ["echo", "hello from bonya"]}'
     ```
 
     ```shell CLI
-    tyto exec $SANDBOX_ID -- echo "hello from tyto"
+    bonya exec $SANDBOX_ID -- echo "hello from bonya"
     ```
 
     ```ts TypeScript
-    const result = await sandbox.exec(["echo", "hello from tyto"]);
+    const result = await sandbox.exec(["echo", "hello from bonya"]);
     console.log(result.stdout, result.exitCode);
     ```
 
     ```python Python
-    result = sandbox.exec(["echo", "hello from tyto"])
+    result = sandbox.exec(["echo", "hello from bonya"])
     print(result.stdout, result.exit_code)
     ```
 
     ```go Go
-    result, err := sandbox.Exec(ctx, []string{"echo", "hello from tyto"})
+    result, err := sandbox.Exec(ctx, []string{"echo", "hello from bonya"})
     if err != nil {
         log.Fatal(err)
     }
@@ -134,12 +134,12 @@ This walks through the smallest possible loop: get a key, create a sandbox, run 
 
     <CodeGroup>
     ```shell cURL
-    curl -s -X DELETE "https://api.tyto.run/v1/sandbox/$SANDBOX_ID" \
+    curl -s -X DELETE "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID" \
       -H "Authorization: Bearer $BONYA_API_KEY"
     ```
 
     ```shell CLI
-    tyto delete $SANDBOX_ID
+    bonya delete $SANDBOX_ID
     ```
 
     ```ts TypeScript
@@ -161,12 +161,12 @@ This walks through the smallest possible loop: get a key, create a sandbox, run 
 
 <CardGroup cols={2}>
   <Card title="CLI Reference" icon="terminal" href="/cli-reference/overview">
-    Install the tyto CLI and browse every command.
+    Install the bonya CLI and browse every command.
   </Card>
   <Card title="Core Concepts" icon="cube" href="/concepts/sandboxes">
     Learn the sandbox lifecycle, exec, sessions, files, previews, snapshots, and organizations.
   </Card>
   <Card title="MCP Server" icon="plug" href="/mcp/overview">
-    Connect Tyto to Claude Desktop, Claude Code, or Cursor.
+    Connect Bonya to Claude Desktop, Claude Code, or Cursor.
   </Card>
 </CardGroup>

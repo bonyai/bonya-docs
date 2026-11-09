@@ -19,14 +19,14 @@ The default choice for scripts, CI, and anything where you just want a result. S
 
 <CodeGroup>
 ```shell cURL
-curl -s -X POST "https://api.tyto.run/v1/sandbox/$SANDBOX_ID/exec" \
+curl -s -X POST "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/exec" \
   -H "Authorization: Bearer $BONYA_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"cmd": ["bash", "-lc", "echo hi"], "timeout_s": 30}'
 ```
 
 ```shell CLI
-tyto exec $SANDBOX_ID -- bash -lc 'echo hi'
+bonya exec $SANDBOX_ID -- bash -lc 'echo hi'
 ```
 
 ```ts TypeScript
@@ -52,13 +52,13 @@ An HTTP upgrade to a WebSocket for a transient, interactive terminal — one-off
 ```shell cURL
 # WebSocket upgrade — shown with websocat, not curl, since curl can't
 # speak the protocol after the 101 response.
-websocat "wss://api.tyto.run/v1/sandbox/$SANDBOX_ID/exec" \
+websocat "wss://api.bonya.ai/v1/sandbox/$SANDBOX_ID/exec" \
   -H "Authorization: Bearer $BONYA_API_KEY"
 # then send a TTYStartRequest as the START frame
 ```
 
 ```shell CLI
-tyto console $SANDBOX_ID
+bonya console $SANDBOX_ID
 ```
 
 ```ts TypeScript
@@ -69,7 +69,7 @@ for await (const event of session) {
 ```
 </CodeGroup>
 
-The CLI's `tyto console` is the everyday entry point for this — it's a shortcut for attaching to (or creating) a managed session named `console`, so under the hood it actually goes through the managed-session path below rather than raw TTY exec. Reach for raw TTY exec directly from an SDK when you want an interactive terminal without the persistence a named session implies.
+The CLI's `bonya console` is the everyday entry point for this — it's a shortcut for attaching to (or creating) a managed session named `console`, so under the hood it actually goes through the managed-session path below rather than raw TTY exec. Reach for raw TTY exec directly from an SDK when you want an interactive terminal without the persistence a named session implies.
 
 ## Managed sessions
 
@@ -78,25 +78,25 @@ For a command that should keep running after you disconnect — a dev server, a 
 <CodeGroup>
 ```shell cURL
 # create
-curl -s -X POST "https://api.tyto.run/v1/sandbox/$SANDBOX_ID/sessions" \
+curl -s -X POST "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/sessions" \
   -H "Authorization: Bearer $BONYA_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"name": "dev", "cmd": ["npm", "run", "dev"]}'
 
 # list
-curl -s "https://api.tyto.run/v1/sandbox/$SANDBOX_ID/sessions" \
+curl -s "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/sessions" \
   -H "Authorization: Bearer $BONYA_API_KEY"
 
 # kill
-curl -s -X POST "https://api.tyto.run/v1/sandbox/$SANDBOX_ID/sessions/dev/kill" \
+curl -s -X POST "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/sessions/dev/kill" \
   -H "Authorization: Bearer $BONYA_API_KEY"
 ```
 
 ```shell CLI
-tyto session create $SANDBOX_ID dev -- npm run dev
-tyto session list $SANDBOX_ID
-tyto session attach $SANDBOX_ID dev
-tyto session kill $SANDBOX_ID dev
+bonya session create $SANDBOX_ID dev -- npm run dev
+bonya session list $SANDBOX_ID
+bonya session attach $SANDBOX_ID dev
+bonya session kill $SANDBOX_ID dev
 ```
 
 ```python Python

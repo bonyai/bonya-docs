@@ -17,14 +17,14 @@ A session is scoped to a `sandbox_id` and keyed by `session_name`, which must ma
 
 <CodeGroup>
 ```shell cURL
-curl -s -X POST "https://api.tyto.run/v1/sandbox/$SANDBOX_ID/sessions" \
+curl -s -X POST "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/sessions" \
   -H "Authorization: Bearer $BONYA_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"name": "dev", "cmd": ["npm", "run", "dev"]}'
 ```
 
 ```shell CLI
-tyto session create $SANDBOX_ID dev -- npm run dev
+bonya session create $SANDBOX_ID dev -- npm run dev
 ```
 
 ```ts TypeScript
@@ -118,12 +118,12 @@ Attaching to a session on a suspended sandbox wakes it, the same way exec traffi
 
 <CodeGroup>
 ```shell cURL
-curl -s "https://api.tyto.run/v1/sandbox/$SANDBOX_ID/sessions" \
+curl -s "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/sessions" \
   -H "Authorization: Bearer $BONYA_API_KEY"
 ```
 
 ```shell CLI
-tyto session list $SANDBOX_ID
+bonya session list $SANDBOX_ID
 ```
 
 ```ts TypeScript
@@ -170,7 +170,7 @@ This is a WebSocket upgrade — see [WebSockets](/concepts/websockets) for how t
 
 <CodeGroup>
 ```shell CLI
-tyto session attach $SANDBOX_ID dev
+bonya session attach $SANDBOX_ID dev
 ```
 
 ```ts TypeScript
@@ -206,14 +206,14 @@ There's no cURL tab here since this operation has no JSON request/response shape
 
 <CodeGroup>
 ```shell cURL
-curl -s -X POST "https://api.tyto.run/v1/sandbox/$SANDBOX_ID/sessions/dev/kill" \
+curl -s -X POST "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/sessions/dev/kill" \
   -H "Authorization: Bearer $BONYA_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"signal": "TERM", "grace_ms": 5000}'
 ```
 
 ```shell CLI
-tyto session kill $SANDBOX_ID dev
+bonya session kill $SANDBOX_ID dev
 ```
 
 ```ts TypeScript

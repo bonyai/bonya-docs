@@ -21,28 +21,28 @@ Synchronous, non-TTY, JSON request and response — no WebSocket upgrade involve
 
 <CodeGroup>
 ```shell cURL
-curl -s -X POST "https://api.tyto.run/v1/sandbox/$SANDBOX_ID/exec" \
+curl -s -X POST "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/exec" \
   -H "Authorization: Bearer $BONYA_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"cmd": ["echo", "hello from tyto"]}'
+  -d '{"cmd": ["echo", "hello from bonya"]}'
 ```
 
 ```shell CLI
-tyto exec $SANDBOX_ID -- echo "hello from tyto"
+bonya exec $SANDBOX_ID -- echo "hello from bonya"
 ```
 
 ```ts TypeScript
-const result = await sandbox.exec(["echo", "hello from tyto"]);
+const result = await sandbox.exec(["echo", "hello from bonya"]);
 console.log(result.stdout, result.exitCode);
 ```
 
 ```python Python
-result = sandbox.exec(["echo", "hello from tyto"])
+result = sandbox.exec(["echo", "hello from bonya"])
 print(result.stdout, result.exit_code)
 ```
 
 ```go Go
-result, err := sandbox.Exec(ctx, []string{"echo", "hello from tyto"})
+result, err := sandbox.Exec(ctx, []string{"echo", "hello from bonya"})
 if err != nil {
     log.Fatal(err)
 }
@@ -119,7 +119,7 @@ There's no raw cURL example for this mode — it's a WebSocket upgrade, not a si
 
 <CodeGroup>
 ```shell CLI
-tyto exec $SANDBOX_ID --tty -- bash
+bonya exec $SANDBOX_ID --tty -- bash
 ```
 
 ```ts TypeScript
@@ -133,7 +133,7 @@ print(result.stdout)
 ```
 
 ```go Go
-result, err := sandbox.Exec(ctx, []string{"bash", "-lc", "stty size; printf done"}, tyto.ExecOptions{TTY: true, Check: true})
+result, err := sandbox.Exec(ctx, []string{"bash", "-lc", "stty size; printf done"}, bonya.ExecOptions{TTY: true, Check: true})
 if err != nil {
     log.Fatal(err)
 }

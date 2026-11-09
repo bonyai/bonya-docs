@@ -3,14 +3,14 @@ title: snapshot
 description: Create and delete snapshots of a sandbox's state
 ---
 
-## `tyto snapshot`
+## `bonya snapshot`
 
 <Info>Alias: `snap`</Info>
 
 Snapshots capture a running sandbox's state. Creating one requires the source sandbox to be **running** — suspended, failed, and deleted sandboxes are all rejected.
 
 <Note>
-There is no `snapshot list` command. `tyto snapshot` only supports `create` and `delete`.
+There is no `snapshot list` command. `bonya snapshot` only supports `create` and `delete`.
 </Note>
 
 ## `create`
@@ -18,7 +18,7 @@ There is no `snapshot list` command. `tyto snapshot` only supports `create` and 
 Creates a snapshot from a running sandbox.
 
 ```shell
-tyto snapshot create [sandbox]
+bonya snapshot create [sandbox]
 ```
 
 | Flag | Default | Description |
@@ -27,7 +27,7 @@ tyto snapshot create [sandbox]
 | `--by-name` | `false` | Treat the sandbox argument as a name even if it looks like an id. |
 
 ```shell
-tyto snapshot create web
+bonya snapshot create web
 ```
 
 ## `delete`
@@ -35,11 +35,11 @@ tyto snapshot create web
 Deletes a snapshot.
 
 ```shell
-tyto snapshot delete [sandbox] <snapshot-id>
+bonya snapshot delete [sandbox] <snapshot-id>
 ```
 
 ```shell
-tyto snapshot delete web snp-a1b2c3d4e5f6
+bonya snapshot delete web snp-a1b2c3d4e5f6
 ```
 
 | Flag | Default | Description |

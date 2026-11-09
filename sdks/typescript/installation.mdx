@@ -3,30 +3,30 @@ title: Installation
 description: Install and configure the TypeScript SDK
 ---
 
-The TypeScript SDK is published to npm as `@bonya-ai/tyto`. It ships ESM
-with bundled type declarations, and talks to Tyto over gRPC — the same
-transport as the CLI.
+The TypeScript SDK is published to npm as `@bonya-ai/bonya`. It ships ESM with
+bundled type declarations. It talks to the Bonya REST API over HTTPS, and to
+the sandbox edge over a WebSocket for streaming exec and terminal sessions.
 
 <Note>
-**Node only.** The transport is gRPC over `@grpc/grpc-js`, which needs
-Node's `http2`. This package does not run in a browser or on edge runtimes.
+**Node only.** The SDK relies on Node's networking stack and filesystem. It does
+not run in a browser or on edge runtimes.
 </Note>
 
 ## Requirements
 
-- Node.js 18 or newer
-- A Tyto API key (`byk_...`)
+- Node.js 18.17 or newer
+- A Bonya API key (`byk_...`)
 
 ## Install
 
 ```bash
-npm install @bonya-ai/tyto
+npm install @bonya-ai/bonya
 ```
 
 ## Configure
 
-Every option has an environment-variable fallback, so the common case needs
-no arguments at all:
+Every option has an environment-variable fallback, so the common case needs no
+arguments at all:
 
 <CodeGroup>
 ```bash Environment variable
@@ -34,9 +34,9 @@ export BONYA_API_KEY=byk_...
 ```
 
 ```ts Explicit
-import { Tyto } from "@bonya-ai/tyto";
+import { Bonya } from "@bonya-ai/bonya";
 
-const client = new Tyto({
+const client = new Bonya({
   apiKey: "byk_...",
   organizationId: "org_123",
 });
@@ -46,44 +46,44 @@ const client = new Tyto({
 | Option | Environment variable | Default |
 |---|---|---|
 | `apiKey` | `BONYA_API_KEY` | *required* |
+| `endpoint` | `BONYA_ENDPOINT` | `https://api.bonya.ai` |
+| `edgeEndpoint` | `BONYA_EDGE_ENDPOINT` | the API endpoint |
 | `organizationId` | `BONYA_ORGANIZATION_ID` | your personal organization |
 | `caBundle` | `BONYA_CA_BUNDLE` | system trust store |
 | `timeout` | — | `30` (seconds) |
 | `maxRetries` | — | `2` |
 | `filesystemReadLimit` | — | 64 MiB |
 
-`apiKey` is required — pass it directly or set `BONYA_API_KEY`.
+`apiKey` is required: pass it directly or set `BONYA_API_KEY`. The key is sent as
+`Authorization: Bearer byk_...`.
 
-`caBundle` points to a PEM bundle for private development CAs. If the file
-can't be read, the constructor throws `InvalidRequestError`.
+`caBundle` points to a PEM bundle for private development CAs. If the file can't
+be read, the constructor throws `InvalidRequestError`.
 
 `timeout` is the default per-operation deadline in seconds; buffered and
-streaming exec calls can override it per call. `maxRetries` controls SDK
-retries for retryable control-plane operations (create, get, list, delete,
-resume, snapshot create, snapshot delete) — it retries gRPC `UNAVAILABLE`
-while preserving the same request and idempotency key where one exists.
-`filesystemReadLimit` caps bytes buffered by `sandbox.readFile()`.
+streaming exec calls can override it per call. `maxRetries` controls retries of
+transient failures. Mutations carry an `Idempotency-Key`, which the SDK reuses
+across its own retries, so a retried call joins the original instead of
+repeating it. `filesystemReadLimit` caps bytes buffered by `sandbox.readFile()`.
 
 <Note>
 An empty `organizationId` (or `BONYA_ORGANIZATION_ID=""`) is an error, not a
-silent fallback to your personal organization — this avoids CI jobs quietly
+silent fallback to your personal organization. This stops CI jobs quietly
 running against the wrong tenant when a variable expansion is empty. See
-[Organizations](/sdks/typescript/usage#organizations) for the full
-precedence and a CI example.
+[Organizations](/sdks/typescript/usage#organizations).
 </Note>
 
-Close the client when you're done — open gRPC channels keep Node's event
-loop alive, so a script that never calls `client.close()` will hang instead
-of exiting.
+Call `client.close()` when you're done so open connections don't keep Node's
+event loop alive.
 
 ## Quickstart
 
 ```ts
-import { Tyto } from "@bonya-ai/tyto";
+import { Bonya } from "@bonya-ai/bonya";
 
-const client = new Tyto(); // reads BONYA_API_KEY
+const client = new Bonya(); // reads BONYA_API_KEY
 try {
-  const sandbox = await client.createSandbox({ template: "bonya-dev" });
+  const sandbox = await client.createSandbox();
   try {
     const result = await sandbox.exec(["echo", "hello"], { check: true });
     console.log(result.stdout); // hello
@@ -95,8 +95,7 @@ try {
 }
 ```
 
-That is a real VM: it boots in about a second, runs anything Linux runs,
-and is gone when `delete()` resolves.
+That is a real VM: it boots in about a second, runs anything Linux runs, and is
+gone when `delete()` resolves.
 
-See [Usage](/sdks/typescript/usage) for the full surface — sessions,
-files, previews, snapshots, and error handling.
+See [Usage](/sdks/typescript/usage) for the full surface.

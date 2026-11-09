@@ -1,55 +1,82 @@
 ---
 title: Snapshots
-description: Capture a sandbox's disk state via the SDKs and CLI
+description: Capture a sandbox's disk state and restore or fork it
 ---
 
-<Warning>
-Snapshots are **not part of the public REST API**. There is no `/v1/sandbox/{sandbox_id}/snapshots` path or any other snapshot route in the OpenAPI contract — snapshot operations exist only as gRPC calls made through the official SDKs and CLI, and won't appear in the [API Reference](/api-reference) tab.
-</Warning>
+A **snapshot** captures a sandbox's disk state. It is identified by a `snapshot_id` and tied to the `source_sandbox_id` it was taken from. Its identity outlives the source: you can delete the sandbox that produced a snapshot and keep the snapshot.
 
-A **snapshot** captures a sandbox's disk state. It's identified by a `snapshot_id` and tied to the `source_sandbox_id` it was taken from.
+Snapshots are part of the public REST API (`/v1/sandbox/{sandbox_id}/snapshots` and `/v1/snapshot/{snapshot_id}`), the SDKs, the CLI and the MCP server.
 
 ## Creating a snapshot
 
-The source sandbox must be **running**. A suspended, failed, or already-deleted sandbox is rejected rather than snapshotted.
+The source sandbox must be **running**. A paused, failed, or deleted sandbox is rejected rather than snapshotted.
 
 <CodeGroup>
+```shell cURL
+curl -X POST https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/snapshots \
+  -H "Authorization: Bearer $BONYA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "baseline"}'
+```
+
 ```python Python
-snapshot = sandbox.snapshot()
+snapshot = sandbox.snapshot(name="baseline")
+```
+
+```ts TypeScript
+const snapshot = await sandbox.snapshot({ name: "baseline" });
 ```
 
 ```go Go
-snapshot, err := client.CreateSnapshot(ctx, sandbox.ID, tyto.SnapshotOptions{
+snapshot, err := client.CreateSnapshot(ctx, sandbox.ID, bonya.SnapshotOptions{
 	IdempotencyKey: "example-snapshot-1",
 })
 ```
 
 ```shell CLI
-tyto snapshot create web
+bonya snapshot create web
 ```
 </CodeGroup>
 
-Both SDKs accept an idempotency key for create, so a retried call returns the same snapshot rather than minting a second one.
+Create accepts an idempotency key, so a retried call returns the same snapshot rather than minting a second one. See [Idempotency](/concepts/idempotency).
 
-A `Snapshot` handle carries its `snapshot_id` and the `source_sandbox_id` it came from. Its identity outlives the source sandbox — deleting the sandbox that produced a snapshot is a separate decision from deleting the snapshot itself.
+## Restoring and forking
 
-## Deleting a snapshot
+Start a new sandbox from a snapshot by passing its id to create:
 
 <CodeGroup>
 ```python Python
-snapshot.delete()
+restored = client.create_sandbox(snapshot=snapshot.id)
 ```
 
-```shell CLI
-tyto snapshot delete web <snapshot-id>
+```ts TypeScript
+const restored = await client.createSandbox({ snapshot: snapshot.id });
 ```
 </CodeGroup>
 
-Delete is idempotent: calling it again on an already-deleted snapshot is a no-op rather than an error.
+To clone a **running** sandbox without naming a snapshot, fork it: `POST /v1/sandbox/{sandbox_id}/fork` with `{"count": 2}`, or `sandbox.fork(2)` in the SDKs.
 
-<Note>
-There is no list, restore, or fork operation for snapshots anywhere in the current SDKs or CLI. The CLI's `snapshot` command group has only `create` and `delete` subcommands — track `snapshot_id` values yourself if you need to find a snapshot again later.
-</Note>
+## Listing and deleting
+
+`GET /v1/sandbox/{sandbox_id}/snapshots` lists a sandbox's snapshots, `GET /v1/snapshot/{snapshot_id}` fetches one, and `DELETE /v1/snapshot/{snapshot_id}` removes it.
+
+<CodeGroup>
+```python Python
+snapshots = sandbox.list_snapshots()
+snapshot.delete()
+```
+
+```ts TypeScript
+const snapshots = await sandbox.listSnapshots();
+await snapshot.delete();
+```
+
+```shell CLI
+bonya snapshot delete web <snapshot-id>
+```
+</CodeGroup>
+
+Delete is idempotent in the SDKs: calling it again on an already-deleted snapshot is a no-op.
 
 ## Related
 

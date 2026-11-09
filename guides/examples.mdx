@@ -11,34 +11,34 @@ Starts a new sandbox from a template. REST returns `202` immediately by default;
 
 <CodeGroup>
 ```shell cURL
-curl -s -X POST "https://api.tyto.run/v1/sandbox?wait=ready" \
+curl -s -X POST "https://api.bonya.ai/v1/sandbox?wait=ready" \
   -H "Authorization: Bearer $BONYA_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"template_id": "bonya-dev"}'
 ```
 
 ```shell CLI
-tyto create --template bonya-dev
+bonya create --template bonya-dev
 ```
 
 ```ts TypeScript
-import { Tyto } from "@bonya-ai/tyto";
+import { Bonya } from "@bonya-ai/bonya";
 
-const client = new Tyto();
+const client = new Bonya();
 const sandbox = await client.createSandbox({ template: "bonya-dev" });
 console.log(sandbox.id);
 ```
 
 ```python Python
-from tyto import Tyto
+from bonya import Bonya
 
-with Tyto() as client:
+with Bonya() as client:
     sandbox = client.create_sandbox(template="bonya-dev")
     print(sandbox.id)
 ```
 
 ```go Go
-client, err := tyto.NewClient()
+client, err := bonya.NewClient()
 if err != nil {
     log.Fatal(err)
 }
@@ -60,20 +60,20 @@ Reconnect to a sandbox by id, or page through every sandbox in the organization,
 
 <CodeGroup>
 ```shell cURL
-curl -s "https://api.tyto.run/v1/sandbox/$SANDBOX_ID" \
+curl -s "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID" \
   -H "Authorization: Bearer $BONYA_API_KEY"
 
-curl -s "https://api.tyto.run/v1/sandbox?states=RUNNING&states=SUSPENDED" \
+curl -s "https://api.bonya.ai/v1/sandbox?states=RUNNING&states=SUSPENDED" \
   -H "Authorization: Bearer $BONYA_API_KEY"
 ```
 
 ```shell CLI
-tyto get $SANDBOX_ID
-tyto list --state running,suspended
+bonya get $SANDBOX_ID
+bonya list --state running,suspended
 ```
 
 ```ts TypeScript
-import { Status } from "@bonya-ai/tyto";
+import { Status } from "@bonya-ai/bonya";
 
 const sandbox = await client.getSandbox(SANDBOX_ID);
 for await (const summary of client.listSandboxes({ states: [Status.RUNNING, Status.SUSPENDED] })) {
@@ -82,7 +82,7 @@ for await (const summary of client.listSandboxes({ states: [Status.RUNNING, Stat
 ```
 
 ```python Python
-from tyto import Status
+from bonya import Status
 
 sandbox = client.get_sandbox(SANDBOX_ID)
 for summary in client.list_sandboxes(states=[Status.RUNNING, Status.SUSPENDED]):
@@ -92,8 +92,8 @@ for summary in client.list_sandboxes(states=[Status.RUNNING, Status.SUSPENDED]):
 ```go Go
 sandbox, err := client.GetSandbox(ctx, sandboxID)
 
-summaries, err := client.ListSandboxes(ctx, tyto.ListOptions{
-    States: []tyto.Status{tyto.StatusRunning, tyto.StatusSuspended},
+summaries, err := client.ListSandboxes(ctx, bonya.ListOptions{
+    States: []bonya.Status{bonya.StatusRunning, bonya.StatusSuspended},
 })
 for _, summary := range summaries {
     fmt.Println(summary.ID, summary.LastObservedStatus)
@@ -109,28 +109,28 @@ One JSON request, one JSON response, no WebSocket. A non-zero exit code is still
 
 <CodeGroup>
 ```shell cURL
-curl -s -X POST "https://api.tyto.run/v1/sandbox/$SANDBOX_ID/exec" \
+curl -s -X POST "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/exec" \
   -H "Authorization: Bearer $BONYA_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"cmd": ["echo", "hello from tyto"]}'
+  -d '{"cmd": ["echo", "hello from bonya"]}'
 ```
 
 ```shell CLI
-tyto exec $SANDBOX_ID -- echo "hello from tyto"
+bonya exec $SANDBOX_ID -- echo "hello from bonya"
 ```
 
 ```ts TypeScript
-const result = await sandbox.exec(["echo", "hello from tyto"]);
+const result = await sandbox.exec(["echo", "hello from bonya"]);
 console.log(result.stdout, result.exitCode);
 ```
 
 ```python Python
-result = sandbox.exec(["echo", "hello from tyto"])
+result = sandbox.exec(["echo", "hello from bonya"])
 print(result.stdout, result.exit_code)
 ```
 
 ```go Go
-result, err := sandbox.Exec(ctx, []string{"echo", "hello from tyto"})
+result, err := sandbox.Exec(ctx, []string{"echo", "hello from bonya"})
 if err != nil {
     log.Fatal(err)
 }
@@ -146,7 +146,7 @@ Get `Stdout`/`Stderr`/`Exit` events as they arrive, instead of waiting for the w
 
 <CodeGroup>
 ```ts TypeScript
-import { Exit, Stderr, Stdout } from "@bonya-ai/tyto";
+import { Exit, Stderr, Stdout } from "@bonya-ai/bonya";
 
 const session = sandbox.execStream(["bash", "-lc", "echo out; echo err >&2"]);
 try {
@@ -160,7 +160,7 @@ try {
 ```
 
 ```python Python
-from tyto import Exit, Stdout
+from bonya import Exit, Stdout
 
 with sandbox.exec_stream(["bash", "-lc", "echo out; echo err >&2"]) as session:
     for event in session:
@@ -182,7 +182,7 @@ for {
     if err != nil || event == nil {
         break
     }
-    if stdout, ok := event.(tyto.Stdout); ok {
+    if stdout, ok := event.(bonya.Stdout); ok {
         fmt.Print(string(stdout.Data))
     }
 }
@@ -198,25 +198,25 @@ A named, persistent command that outlives your connection and survives the sandb
 <CodeGroup>
 ```shell cURL
 # create
-curl -s -X POST "https://api.tyto.run/v1/sandbox/$SANDBOX_ID/sessions" \
+curl -s -X POST "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/sessions" \
   -H "Authorization: Bearer $BONYA_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"name": "dev", "cmd": ["npm", "run", "dev"]}'
 
 # list
-curl -s "https://api.tyto.run/v1/sandbox/$SANDBOX_ID/sessions" \
+curl -s "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/sessions" \
   -H "Authorization: Bearer $BONYA_API_KEY"
 
 # kill
-curl -s -X POST "https://api.tyto.run/v1/sandbox/$SANDBOX_ID/sessions/dev/kill" \
+curl -s -X POST "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/sessions/dev/kill" \
   -H "Authorization: Bearer $BONYA_API_KEY"
 ```
 
 ```shell CLI
-tyto session create $SANDBOX_ID dev -- npm run dev
-tyto session list $SANDBOX_ID
-tyto session attach $SANDBOX_ID dev
-tyto session kill $SANDBOX_ID dev
+bonya session create $SANDBOX_ID dev -- npm run dev
+bonya session list $SANDBOX_ID
+bonya session attach $SANDBOX_ID dev
+bonya session kill $SANDBOX_ID dev
 ```
 
 ```ts TypeScript
@@ -279,25 +279,25 @@ Read and write bodies over REST are raw bytes — not tar archives or multipart 
 <CodeGroup>
 ```shell cURL
 # write
-curl -s -X PUT "https://api.tyto.run/v1/sandbox/$SANDBOX_ID/fs/write?path=/workspace/hello.txt" \
+curl -s -X PUT "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/fs/write?path=/workspace/hello.txt" \
   -H "Authorization: Bearer $BONYA_API_KEY" \
   -H "Content-Type: application/octet-stream" \
   --data-binary @./hello.txt
 
 # read
-curl -s "https://api.tyto.run/v1/sandbox/$SANDBOX_ID/fs/read?path=/workspace/hello.txt" \
+curl -s "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/fs/read?path=/workspace/hello.txt" \
   -H "Authorization: Bearer $BONYA_API_KEY" \
   -o ./hello.downloaded.txt
 
 # list
-curl -s "https://api.tyto.run/v1/sandbox/$SANDBOX_ID/fs/list?path=/workspace" \
+curl -s "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/fs/list?path=/workspace" \
   -H "Authorization: Bearer $BONYA_API_KEY"
 ```
 
 ```shell CLI
-tyto fs upload $SANDBOX_ID ./hello.txt /workspace/hello.txt
-tyto fs download $SANDBOX_ID /workspace/hello.txt ./hello.downloaded.txt
-tyto fs ls $SANDBOX_ID /workspace
+bonya fs upload $SANDBOX_ID ./hello.txt /workspace/hello.txt
+bonya fs download $SANDBOX_ID /workspace/hello.txt ./hello.downloaded.txt
+bonya fs ls $SANDBOX_ID /workspace
 ```
 
 ```ts TypeScript
@@ -339,22 +339,22 @@ Publishes one guest port at an HTTPS URL a browser can open. Ports must be 1024�
 
 <CodeGroup>
 ```shell cURL
-curl -s -X POST "https://api.tyto.run/v1/sandbox/$SANDBOX_ID/previews" \
+curl -s -X POST "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/previews" \
   -H "Authorization: Bearer $BONYA_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"port": 3000, "name": "web"}'
 
-curl -s "https://api.tyto.run/v1/sandbox/$SANDBOX_ID/previews" \
+curl -s "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/previews" \
   -H "Authorization: Bearer $BONYA_API_KEY"
 
-curl -s -X DELETE "https://api.tyto.run/v1/sandbox/$SANDBOX_ID/previews/$PREVIEW_ID" \
+curl -s -X DELETE "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/previews/$PREVIEW_ID" \
   -H "Authorization: Bearer $BONYA_API_KEY"
 ```
 
 ```shell CLI
-tyto preview create $SANDBOX_ID 3000 --name web
-tyto preview list $SANDBOX_ID
-tyto preview delete $SANDBOX_ID $PREVIEW_ID
+bonya preview create $SANDBOX_ID 3000 --name web
+bonya preview list $SANDBOX_ID
+bonya preview delete $SANDBOX_ID $PREVIEW_ID
 ```
 
 ```ts TypeScript
@@ -374,7 +374,7 @@ sandbox.delete_preview(preview.id)
 ```
 
 ```go Go
-preview, err := sandbox.CreatePreview(ctx, 3000, tyto.CreatePreviewOptions{Name: "web"})
+preview, err := sandbox.CreatePreview(ctx, 3000, bonya.CreatePreviewOptions{Name: "web"})
 fmt.Println(preview.URL)
 
 previews, err := sandbox.ListPreviews(ctx)
@@ -382,16 +382,23 @@ err = sandbox.DeletePreview(ctx, preview.ID)
 ```
 </CodeGroup>
 
-**MCP:** `preview_create`, `preview_list`, and `preview_delete` cover all three — `preview_create`'s result deliberately drops the one-time `capability_jws` token, returning only the token-free `url`.
+**MCP:** `preview_create`, `preview_list`, `preview_get`, `preview_delete` and the `preview_grant_*` tools cover these. A grant token is shown once, in the response that creates it.
 
-## Snapshots (create/delete)
+## Snapshots
 
-Captures a running sandbox's disk state. Snapshots are **not part of the public REST API** — there's no `/v1/sandbox/{sandbox_id}/snapshots` path; this is a gRPC-only capability reached through the SDKs and CLI, so there's no cURL example.
+Captures a running sandbox's disk state. Restore by passing the snapshot id to sandbox create.
+
+```shell cURL
+curl -X POST https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/snapshots \
+  -H "Authorization: Bearer $BONYA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "baseline"}'
+```
 
 <CodeGroup>
 ```shell CLI
-tyto snapshot create $SANDBOX_ID
-tyto snapshot delete $SANDBOX_ID $SNAPSHOT_ID
+bonya snapshot create $SANDBOX_ID
+bonya snapshot delete $SANDBOX_ID $SNAPSHOT_ID
 ```
 
 ```ts TypeScript
@@ -416,27 +423,27 @@ snapshot.Delete(ctx)
 ```
 </CodeGroup>
 
-There's no MCP tool for snapshots — [MCP tools](/mcp/tools) notes they're managed exclusively through the gRPC SDKs and are out of scope for the MCP server.
+**MCP:** `snapshot_create`, `snapshot_list`, `snapshot_get`, and `snapshot_delete`; pass `snapshot` to `sandbox_create` to restore.
 
 ## Jobs (run_job/start_job and language equivalents)
 
-A managed run of a command or script on a new or existing sandbox. `run_job`/`RunJob` blocks until it finishes; `start_job`/`StartJob` returns a run id immediately for you to poll later. There's no `tyto job` CLI command — jobs are reached through REST or an SDK.
+A managed run of a command or script on a new or existing sandbox. `run_job`/`RunJob` blocks until it finishes; `start_job`/`StartJob` returns a run id immediately for you to poll later. There's no `bonya job` CLI command — jobs are reached through REST or an SDK.
 
 <CodeGroup>
 ```shell cURL
 # run and wait for the result (wait is a body field, not a query param)
-curl -s -X POST "https://api.tyto.run/v1/job" \
+curl -s -X POST "https://api.bonya.ai/v1/job" \
   -H "Authorization: Bearer $BONYA_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"new_sandbox": {"template_id": "bonya-dev"}, "cmd": ["./run-tests.sh"], "wait": true}'
 
 # start durably and check later (wait defaults to false)
-curl -s -X POST "https://api.tyto.run/v1/job" \
+curl -s -X POST "https://api.bonya.ai/v1/job" \
   -H "Authorization: Bearer $BONYA_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"existing_sandbox_id": "'"$SANDBOX_ID"'", "cmd": ["./long-migration.sh"]}'
 
-curl -s "https://api.tyto.run/v1/job/$RUN_ID" \
+curl -s "https://api.bonya.ai/v1/job/$RUN_ID" \
   -H "Authorization: Bearer $BONYA_API_KEY"
 ```
 
@@ -455,7 +462,7 @@ const detail = await client.getJobRun(runId);
 ```
 
 ```python Python
-from tyto import JobSandboxSpec, JobSpec
+from bonya import JobSandboxSpec, JobSpec
 
 run = client.run_job(JobSpec(
     new_sandbox=JobSandboxSpec(template="bonya-dev"),
@@ -471,13 +478,13 @@ detail = client.get_job_run(run_id)
 ```
 
 ```go Go
-run, err := client.RunJob(ctx, tyto.JobSpec{
-    NewSandbox: &tyto.JobSandboxSpec{Template: "bonya-dev"},
+run, err := client.RunJob(ctx, bonya.JobSpec{
+    NewSandbox: &bonya.JobSandboxSpec{Template: "bonya-dev"},
     Cmd:        []string{"./run-tests.sh"},
 })
 fmt.Println(run.Status, run.Result.ExitCode)
 
-runID, alreadyRunning, err := client.StartJob(ctx, tyto.JobSpec{
+runID, alreadyRunning, err := client.StartJob(ctx, bonya.JobSpec{
     ExistingSandboxID: sandboxID,
     Cmd:               []string{"./long-migration.sh"},
 })
@@ -489,19 +496,19 @@ detail, err := client.GetJobRun(ctx, runID)
 
 ## Job schedules (create/list/trigger)
 
-Wraps a job spec with timing — cron, an interval, or a one-shot future time — so it runs without you calling the job endpoint yourself. There's no `tyto job-schedule` CLI command.
+Wraps a job spec with timing — cron, an interval, or a one-shot future time — so it runs without you calling the job endpoint yourself. There's no `bonya job-schedule` CLI command.
 
 <CodeGroup>
 ```shell cURL
-curl -s -X POST "https://api.tyto.run/v1/job-schedule" \
+curl -s -X POST "https://api.bonya.ai/v1/job-schedule" \
   -H "Authorization: Bearer $BONYA_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"interval_s": 3600, "job": {"new_sandbox": {"template_id": "bonya-dev"}, "cmd": ["./nightly-report.sh"]}}'
 
-curl -s "https://api.tyto.run/v1/job-schedule" \
+curl -s "https://api.bonya.ai/v1/job-schedule" \
   -H "Authorization: Bearer $BONYA_API_KEY"
 
-curl -s -X POST "https://api.tyto.run/v1/job-schedule/$SCHEDULE_ID/trigger" \
+curl -s -X POST "https://api.bonya.ai/v1/job-schedule/$SCHEDULE_ID/trigger" \
   -H "Authorization: Bearer $BONYA_API_KEY"
 ```
 
@@ -519,7 +526,7 @@ await client.triggerJobSchedule(schedule.scheduleId);
 ```
 
 ```python Python
-from tyto import JobSandboxSpec, JobSpec, ScheduleSpec
+from bonya import JobSandboxSpec, JobSpec, ScheduleSpec
 
 schedule = client.create_job_schedule(
     ScheduleSpec(interval_seconds=3600),
@@ -533,8 +540,8 @@ client.trigger_job_schedule(schedule.schedule_id)
 
 ```go Go
 schedule, err := client.CreateJobSchedule(ctx,
-    tyto.ScheduleSpec{IntervalSeconds: 3600},
-    tyto.JobSpec{NewSandbox: &tyto.JobSandboxSpec{Template: "bonya-dev"}, Cmd: []string{"./nightly-report.sh"}},
+    bonya.ScheduleSpec{IntervalSeconds: 3600},
+    bonya.JobSpec{NewSandbox: &bonya.JobSandboxSpec{Template: "bonya-dev"}, Cmd: []string{"./nightly-report.sh"}},
 )
 fmt.Println(schedule.ScheduleID, schedule.NextRunAtUnixNanos)
 
@@ -547,11 +554,11 @@ err = client.TriggerJobSchedule(ctx, schedule.ScheduleID)
 
 ## Templates (list templates)
 
-Lists every `template_id`/version a create or job call will accept, with metadata like OS and preinstalled language stacks. Not paginated — the catalog is the same for every caller. There's no `tyto template` CLI command; `tyto create` offers the catalog interactively instead.
+Lists every `template_id`/version a create or job call will accept, with metadata like OS and preinstalled language stacks. Not paginated — the catalog is the same for every caller. There's no `bonya template` CLI command; `bonya create` offers the catalog interactively instead.
 
 <CodeGroup>
 ```shell cURL
-curl -s "https://api.tyto.run/v1/templates" \
+curl -s "https://api.bonya.ai/v1/templates" \
   -H "Authorization: Bearer $BONYA_API_KEY"
 ```
 
@@ -584,12 +591,12 @@ Deletion is a synchronous teardown — the call doesn't return until the sandbox
 
 <CodeGroup>
 ```shell cURL
-curl -s -X DELETE "https://api.tyto.run/v1/sandbox/$SANDBOX_ID" \
+curl -s -X DELETE "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID" \
   -H "Authorization: Bearer $BONYA_API_KEY"
 ```
 
 ```shell CLI
-tyto delete $SANDBOX_ID
+bonya delete $SANDBOX_ID
 ```
 
 ```ts TypeScript

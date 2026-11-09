@@ -9,19 +9,19 @@ If your sandbox is running a dev server or API on some port, a preview turns tha
 
 <CodeGroup>
 ```shell cURL
-curl -s -X POST "https://api.tyto.run/v1/sandbox/$SANDBOX_ID/previews" \
+curl -s -X POST "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/previews" \
   -H "Authorization: Bearer $BONYA_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"port": 3000, "name": "web"}'
 ```
 
 ```shell CLI
-tyto preview create $SANDBOX_ID 3000 --name web
+bonya preview create $SANDBOX_ID 3000 --name web
 ```
 
 ```ts TypeScript
 const preview = await sandbox.createPreview(3000, { name: "web" });
-console.log(preview.url); // https://pv-<26 chars>.preview.tyto.run
+console.log(preview.url); // https://pv-<26 chars>.tv.bonya.ai
 ```
 
 ```python Python
@@ -30,7 +30,7 @@ print(preview.url)
 ```
 
 ```go Go
-preview, err := sandbox.CreatePreview(ctx, 3000, tyto.CreatePreviewOptions{Name: "web"})
+preview, err := sandbox.CreatePreview(ctx, 3000, bonya.CreatePreviewOptions{Name: "web"})
 fmt.Println(preview.URL)
 ```
 </CodeGroup>
@@ -46,18 +46,18 @@ fmt.Println(preview.URL)
 
 <CodeGroup>
 ```shell cURL
-curl -s -X POST "https://api.tyto.run/v1/sandbox/$SANDBOX_ID/previews" \
+curl -s -X POST "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/previews" \
   -H "Authorization: Bearer $BONYA_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"port": 8080, "auth_mode": "public"}'
 ```
 
 ```shell CLI
-tyto preview create $SANDBOX_ID 8080 --auth public
+bonya preview create $SANDBOX_ID 8080 --auth public
 ```
 
 ```ts TypeScript
-import { PreviewAuth } from "@bonya-ai/tyto";
+import { PreviewAuth } from "@bonya-ai/bonya";
 
 const publicPreview = await sandbox.createPreview(8080, { auth: PreviewAuth.PUBLIC });
 ```
@@ -100,16 +100,16 @@ Don't store `capability_jws` in a URL, log, or anywhere durable beyond the singl
 
 <CodeGroup>
 ```shell cURL
-curl -s "https://api.tyto.run/v1/sandbox/$SANDBOX_ID/previews" \
+curl -s "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/previews" \
   -H "Authorization: Bearer $BONYA_API_KEY"
 
-curl -s -X DELETE "https://api.tyto.run/v1/sandbox/$SANDBOX_ID/previews/$PREVIEW_ID" \
+curl -s -X DELETE "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/previews/$PREVIEW_ID" \
   -H "Authorization: Bearer $BONYA_API_KEY"
 ```
 
 ```shell CLI
-tyto preview list $SANDBOX_ID
-tyto preview delete $SANDBOX_ID $PREVIEW_ID
+bonya preview list $SANDBOX_ID
+bonya preview delete $SANDBOX_ID $PREVIEW_ID
 ```
 
 ```ts TypeScript

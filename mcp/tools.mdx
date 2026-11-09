@@ -1,45 +1,45 @@
 ---
 title: Tools
-description: Tools exposed by the Tyto MCP server
+description: Tools exposed by the Bonya MCP server
 ---
 
-The server registers 31 tools across six groups: sandboxes, exec & filesystem, sessions, previews, jobs, and job schedules — plus a `template_list` tool for discovering what templates are available. Every tool takes and returns plain JSON — ids, not objects, are how you chain calls together (e.g. `sandbox_create` → its `sandbox_id` → `sandbox_exec`).
+The server registers 63 tools across 12 groups. Every tool takes and returns plain JSON — ids, not objects, are how you chain calls together (e.g. `sandbox_create` → its `sandbox_id` → `sandbox_exec`).
 
 <Note>
-Results are returned as pretty-printed JSON text. Errors are returned as MCP tool errors (`isError: true`) formatted as `Tyto API error <status> (<code>): <detail>`, using the `code`/`detail` fields from the API's RFC 9457 problem+json error body.
+Results are returned as pretty-printed JSON text. Errors are returned as MCP tool errors (`isError: true`) formatted as `Bonya API error <status> (<code>): <detail>`, using the `code`/`detail` fields from the API's RFC 9457 problem+json error body.
 </Note>
 
 ## Sandboxes
 
+Create and manage isolated compute environments.
+
 ### `sandbox_create`
 
-Create a new sandbox — an isolated cloud compute environment — from a template. By default returns immediately with the sandbox in `CREATING` state (HTTP 202); pass `wait=true` to block until it's ready (HTTP 201).
+Create a new sandbox (an isolated cloud compute environment) from a template. By default returns immediately with the sandbox in 'creating' state (202); pass wait=true to block until it is ready (201).
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `template_id` | string | yes | Template to create the sandbox from, e.g. `"bonya-dev"`. Use `template_list` to discover available template ids and versions. |
-| `template_version` | string | no | Specific template version. Requires `template_id`; otherwise the server selects that template's default version. |
-| `name` | string (max 80) | no | Display label. Not unique — every lookup is by `sandbox_id`. |
+| `template_id` | string | no | Optional template id. Omit to use the deployment default. Use template_list to discover available templates. |
+| `template_version` | string | no | Optional specific template version. Defaults to the template's latest. |
+| `name` | string | no | Optional display label (not unique; every lookup is by sandbox_id). |
+| `snapshot` | string | no | Optional snapshot id to restore the new sandbox from (see snapshot_list). |
+| `image` | string | no | Optional public OCI image reference (tag or digest) to create the sandbox from instead of a template. Cannot be combined with snapshot, template_id or template_version. Required for GPU sandboxes unless an image template is used. |
+| `gpu` | object | no | Optional GPU request, for a GPU sandbox. Pick a type/count from sandbox_gpu_options (an empty list means no GPU capacity is available). Requires an `image` (or an image template); cannot be combined with snapshot or template_version. Subject to the organization's concurrent-GPU limit. |
+| `network` | object | no | Network egress policy for the sandbox. |
+| `env` | object | no | Optional environment variables set in the sandbox. |
+| `secret_sets` | string[] | no | Optional secret set names to inject into the sandbox (see secret_set_list). |
 | `wait` | boolean | no | If true, block until the sandbox is ready instead of returning immediately. |
-
-<Note>
-`template_id` is always required through this MCP tool, even though the underlying `POST /v1/sandbox` endpoint (and the REST/CLI/jobs interfaces to it) allow omitting it in favor of a deployment's default template. Use `template_list` to discover ids and versions.
-</Note>
-
-**Returns:** the sandbox envelope (`{ sandbox: {...} }`) including `sandbox_id`, `operation_id`, `template_id`, `template_version`, `state`, and optional `name`/`failure_code`/`failure_message`.
 
 ### `sandbox_list`
 
-List sandboxes, optionally filtered by state or exact-match name. Paginated.
+List sandboxes, optionally filtered by state. Paginated.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `page_size` | integer (1-100) | no | Page size. Default 50. |
+| `page_size` | integer | no | Page size (default 50). |
 | `page_token` | string | no | Pagination token from a previous response. |
-| `states` | array of enum | no | Filter to these states: `CREATING`, `RUNNING`, `SUSPENDING`, `SUSPENDED`, `RESUMING`, `FAILED`. `DELETED` sandboxes are not filterable. |
-| `name` | string | no | Exact-match name filter. Names are not unique, so this can match more than one sandbox. |
-
-**Returns:** `{ sandboxes: [...], next_page_token? }`.
+| `states` | `creating` \| `running` \| `warm` \| `cooling` \| `cold` \| `waking` \| `deleting` \| `failed` \| `lost`[] | no | Filter to these states. Deleted sandboxes are not listed. |
+| `include_disposable` | boolean | no | Include disposable (job-created) sandboxes in the listing. |
 
 ### `sandbox_get`
 
@@ -47,9 +47,7 @@ Fetch the current state of a single sandbox by id.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `sandbox_id` | string | yes | The sandbox id (e.g. as returned by `sandbox_create` or `sandbox_list`). |
-
-**Returns:** the sandbox envelope (`{ sandbox: {...} }`).
+| `sandbox_id` | string | yes | The sandbox id (e.g. as returned by sandbox_create or sandbox_list). |
 
 ### `sandbox_delete`
 
@@ -57,37 +55,109 @@ Permanently and synchronously delete a sandbox. Deleting an already-deleted sand
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `sandbox_id` | string | yes | The sandbox id. |
+| `sandbox_id` | string | yes | The sandbox id (e.g. as returned by sandbox_create or sandbox_list). |
 
-**Returns:** `{ ok: true, deleted: "<sandbox_id>" }`.
+## Lifecycle, network & GPU
 
-### `sandbox_resume`
+Pause, keep awake (which also wakes a paused sandbox), restrict egress, fork, and see GPU capacity.
 
-Resume a suspended sandbox. Suspension happens automatically; this is the only explicit lifecycle verb — there's no separate start/stop/wake. Resuming an already-running sandbox succeeds and reports `already_running: true`.
+### `sandbox_pause`
+
+Force a sandbox to pause. 'warm' keeps it quick to resume; 'cold' frees more resources but resumes slower. Returns once the stage is reached. A paused sandbox wakes on sandbox_keepalive, on exec/file access, or on incoming traffic.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `sandbox_id` | string | yes | The sandbox id. |
+| `sandbox_id` | string | yes | The sandbox id (e.g. as returned by sandbox_create or sandbox_list). |
+| `stage` | `warm` \| `cold` | yes | Pause stage. |
 
-**Returns:** `{ sandbox_id, already_running }`.
+### `sandbox_keepalive`
+
+Place an expiring keep-awake hold on a sandbox so it is not auto-paused; a paused sandbox is woken. Returns keepalive_until.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `sandbox_id` | string | yes | The sandbox id (e.g. as returned by sandbox_create or sandbox_list). |
+| `for` | string | yes | Hold duration as a Go-style duration, e.g. "30m" or "2h". |
+
+### `sandbox_network_update`
+
+Replace the network egress policy of a running sandbox (open, allowlist of domains/CIDRs, or airgap).
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `sandbox_id` | string | yes | The sandbox id (e.g. as returned by sandbox_create or sandbox_list). |
+| `mode` | `open` \| `allowlist` \| `airgap` | yes | open = unrestricted egress (default); allowlist = only the 'allow' destinations; airgap = no network. |
+| `allow` | object[] | no | Allowed destinations; used when mode is 'allowlist'. |
+
+### `sandbox_gpu_options`
+
+List the GPU type/count combinations currently available for GPU sandboxes (the 'gpu' parameter of sandbox_create, which also needs an 'image'). An empty list means no GPU capacity is configured.
+
+_No parameters._
+
+### `sandbox_fork`
+
+Create N new sandboxes that start with the source sandbox's memory and disk, on the same node. Each child is a separate sandbox you must delete when done.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `sandbox_id` | string | yes | The sandbox id (e.g. as returned by sandbox_create or sandbox_list). |
+| `count` | integer | yes | Number of forks to create. |
+
+## Snapshots
+
+Capture a sandbox's disk state and restore it with `sandbox_create`'s `snapshot` parameter.
+
+### `snapshot_create`
+
+Create a named snapshot of a sandbox that new sandboxes can later be restored from (sandbox_create with 'snapshot').
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `sandbox_id` | string | yes | The sandbox id (e.g. as returned by sandbox_create or sandbox_list). |
+| `name` | string | yes | Snapshot name. |
+
+### `snapshot_list`
+
+List the snapshots taken of a sandbox.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `sandbox_id` | string | yes | The sandbox id (e.g. as returned by sandbox_create or sandbox_list). |
+
+### `snapshot_get`
+
+Fetch a single snapshot by id.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `snapshot_id` | string | yes | The snapshot id (as returned by snapshot_create or snapshot_list). |
+
+### `snapshot_delete`
+
+Permanently delete a snapshot. This cannot be undone.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `snapshot_id` | string | yes | The snapshot id (as returned by snapshot_create or snapshot_list). |
 
 ## Exec & filesystem
 
+Run buffered commands and work with files.
+
 ### `sandbox_exec`
 
-Run a command in a sandbox and wait for it to finish (buffered, non-interactive). Returns exit code, stdout, and stderr. For long-running or interactive processes, use `session_create` instead.
+Run a command in a sandbox and wait for it to finish (buffered, non-interactive). Returns exit code, stdout, and stderr. For long-running or interactive processes, use session_create instead.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `sandbox_id` | string | yes | The sandbox id. |
-| `cmd` | array of string (min 1) | yes | Command and arguments, e.g. `["bash","-lc","echo hi"]` or `["ls","-la"]`. |
+| `cmd` | string[] | yes | Command and arguments, e.g. ["bash","-lc","echo hi"] or ["ls","-la"]. |
 | `path` | string | no | Working directory inside the sandbox. |
-| `env` | object (string → string) | no | Extra environment variables. |
-| `timeout_s` | integer (1-300) | no | Max seconds to wait for the command to finish. |
+| `env` | object | no | Extra environment variables. |
+| `timeout_s` | integer | no | Max seconds to wait for the command to finish (1-300). |
 | `stdin_b64` | string | no | Base64-encoded bytes to write to the command's stdin. |
-| `output_encoding` | enum: `utf8`, `base64` | no | Encoding for the returned stdout/stderr. Defaults to `utf8`. |
-
-**Returns:** `{ exit_code, signaled, signal?, timed_out, stdout, stderr, stdout_truncated, stderr_truncated, output_encoding }`.
+| `output_encoding` | `utf8` \| `base64` | no | Encoding for the returned stdout/stderr. Defaults to utf8. |
 
 ### `fs_read`
 
@@ -97,8 +167,6 @@ Read a file's raw bytes from a sandbox and return its UTF-8 text content.
 |---|---|---|---|
 | `sandbox_id` | string | yes | The sandbox id. |
 | `path` | string | yes | Path to read inside the sandbox. |
-
-**Returns:** the file's contents as a UTF-8 string.
 
 ### `fs_write`
 
@@ -110,8 +178,6 @@ Write UTF-8 text content to a file in a sandbox, creating or overwriting it.
 | `path` | string | yes | Destination path inside the sandbox. |
 | `content` | string | yes | UTF-8 text content to write. |
 
-**Returns:** `{ ok: true, path, bytes }`.
-
 ### `fs_list`
 
 List the entries of a directory in a sandbox.
@@ -120,8 +186,6 @@ List the entries of a directory in a sandbox.
 |---|---|---|---|
 | `sandbox_id` | string | yes | The sandbox id. |
 | `path` | string | yes | Directory path inside the sandbox. |
-
-**Returns:** `{ files: [{ path, name, kind, size, mode, modified_at_unix_nanos }, ...] }`.
 
 ### `fs_stat`
 
@@ -132,8 +196,6 @@ Get metadata (kind, size, mode, modified time) for a path in a sandbox.
 | `sandbox_id` | string | yes | The sandbox id. |
 | `path` | string | yes | Path inside the sandbox. |
 
-**Returns:** `{ file: { path, name, kind, size, mode, modified_at_unix_nanos } }`.
-
 ### `fs_mkdir`
 
 Create a directory (and any missing parents) in a sandbox.
@@ -142,8 +204,6 @@ Create a directory (and any missing parents) in a sandbox.
 |---|---|---|---|
 | `sandbox_id` | string | yes | The sandbox id. |
 | `path` | string | yes | Directory path to create inside the sandbox. |
-
-**Returns:** `{ ok: true, path }`.
 
 ### `fs_rename`
 
@@ -155,244 +215,452 @@ Rename or move a file or directory within a sandbox.
 | `from` | string | yes | Existing path inside the sandbox. |
 | `to` | string | yes | New path inside the sandbox. |
 
-**Returns:** `{ ok: true, from, to }`.
-
 ### `fs_delete`
 
-Delete a file or directory in a sandbox. Pass `recursive=true` to delete a non-empty directory.
+Delete a file or directory in a sandbox. Pass recursive=true to delete a non-empty directory.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `sandbox_id` | string | yes | The sandbox id. |
 | `path` | string | yes | Path to delete inside the sandbox. |
-| `recursive` | boolean | no | Delete directories recursively. Default false. |
-
-**Returns:** `{ ok: true, deleted: path }`.
+| `recursive` | boolean | no | Delete directories recursively (default false). |
 
 ## Sessions
 
-Sessions are named, long-lived background processes — the counterpart to `sandbox_exec` for anything that needs to keep running (dev servers, watchers, long jobs) rather than block on a single request.
+Long-lived named background processes.
 
 ### `session_create`
 
-Create a named, long-lived session running a command in a sandbox. Unlike `sandbox_exec`, the session keeps running in the background; use `session_list` to check on it and `session_kill` to stop it. Creating a session with a name that already has a live session fails with `session_exists` (409) unless `replace` is set, which replaces a terminal (finished) session of the same name.
+Create a named, long-lived session running a command in a sandbox. Unlike sandbox_exec, the session keeps running in the background; use session_list to check on it and session_kill to stop it. Creating a session with a name that already has a live session fails with session_exists (409) unless replace is set, which replaces a terminal (finished) session of the same name.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `sandbox_id` | string | yes | The sandbox id. |
-| `name` | string | yes | Session name, unique per sandbox. Must match `^[a-z][a-z0-9-]{0,31}$` — starts with a lowercase letter, only lowercase letters/digits/hyphens, max 32 chars. |
-| `cmd` | array of string (min 1) | yes | Command and arguments, e.g. `["bash","-lc","npm run dev"]`. |
+| `name` | string | yes | The session name (unique per sandbox). |
+| `cmd` | string[] | yes | Command and arguments, e.g. ["bash","-lc","npm run dev"]. |
 | `path` | string | no | Working directory inside the sandbox. |
-| `env` | object (string → string) | no | Extra environment variables. |
-| `cols` | integer (1-512) | no | Terminal columns. |
-| `rows` | integer (1-512) | no | Terminal rows. |
+| `env` | object | no | Extra environment variables. |
+| `cols` | integer | no | Terminal columns. |
+| `rows` | integer | no | Terminal rows. |
 | `replace` | boolean | no | Replace an existing terminal (finished) session of the same name. |
-
-**Returns:** `{ session: { name, command, working_dir, status, attached, started_at_unix_nanos, last_activity_unix_nanos, ended_at_unix_nanos?, exit? } }`.
 
 ### `session_list`
 
-List sessions for a sandbox. Never wakes a suspended sandbox — a suspended sandbox answers from its suspend snapshot, indicated by `sandbox_suspended: true` in the response.
+List sessions for a sandbox. Never wakes a suspended sandbox; a suspended sandbox answers from its suspend snapshot (sandbox_suspended: true in the response).
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `sandbox_id` | string | yes | The sandbox id. |
-
-**Returns:** `{ sessions: [...], sandbox_suspended }`.
 
 ### `session_kill`
 
-Terminate a named session. Sends a signal (default `TERM`) and, after `grace_ms`, escalates. Returns the session's resulting state.
+Terminate a named session. Sends a signal (default TERM) and, after grace_ms, escalates. Returns the session's resulting state.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `sandbox_id` | string | yes | The sandbox id. |
-| `session_name` | string | yes | Session name (same format as `session_create`'s `name`). |
-| `signal` | enum: `TERM`, `KILL`, `INT`, `HUP` | no | Signal to send. Default `TERM`. |
-| `grace_ms` | integer (0-60000) | no | Grace period before escalation, in ms. Default 5000. |
-
-**Returns:** `{ session: {...} }`.
+| `session_name` | string | yes | The session name (unique per sandbox). |
+| `signal` | `TERM` \| `KILL` \| `INT` \| `HUP` | no | Signal to send (default TERM). |
+| `grace_ms` | integer | no | Grace period before escalation in ms (default 5000, max 60000). |
 
 ## Previews
 
+Publish a sandbox port at an HTTPS URL, with private (grant-token) or public access.
+
 ### `preview_create`
 
-Create a preview URL that proxies to a port inside a sandbox, so a running service can be reached over the web.
+Create a preview URL that proxies to a port inside a sandbox, so a running service can be reached over the web. A 'private' preview (default) also returns a grant whose token and exchange_url are shown only in this response; open exchange_url once in a browser to get access. A 'public' preview needs no token.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `sandbox_id` | string | yes | The sandbox id. |
-| `port` | integer (1024-65535) | yes | Port inside the sandbox to expose. |
-| `auth_mode` | enum: `token`, `public` | no | `token` (default) requires the Roxy token exchange; `public` is open. |
-| `name` | string (max 80 UTF-8 bytes) | no | Display name — metadata only. |
-
-**Returns:** the preview object (`preview_id`, `sandbox_id`, `port`, `auth_mode`, `name?`, `url`, `created_at_unix_nanos`).
-
-<Warning>
-The underlying API response also includes a one-time `capability_jws` capability token used for the browser token-exchange flow. This tool deliberately drops it from the result before returning — it's sensitive and isn't needed to reach the token-free `url`. Only the plain `url` is returned to the caller.
-</Warning>
+| `port` | integer | yes | Port inside the sandbox to expose. |
+| `auth` | `private` \| `public` | no | 'private' (default) requires a grant token; 'public' is open. |
+| `ttl_seconds` | integer | no | Grant lifetime in seconds (0 or omitted uses the service default). |
 
 ### `preview_list`
 
-List all previews for a sandbox. Never returns capability tokens.
+List all previews for a sandbox. Never returns grant tokens.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `sandbox_id` | string | yes | The sandbox id. |
 
-**Returns:** `{ previews: [...] }`.
+### `preview_get`
+
+Fetch a single preview by id.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `sandbox_id` | string | yes | The sandbox id. |
+| `preview_id` | string | yes | The preview id (e.g. pv-...). |
 
 ### `preview_delete`
 
-Delete a preview by id, immediately disabling its URL. Idempotent.
+Delete a preview by id, immediately disabling its URL. Returns the deleted preview.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `sandbox_id` | string | yes | The sandbox id. |
-| `preview_id` | string | yes | The preview id (e.g. `pv-...`). |
+| `preview_id` | string | yes | The preview id (e.g. pv-...). |
 
-**Returns:** `{ ok: true, deleted: "<preview_id>" }`.
+### `preview_grant_create`
+
+Create a new access grant for a private preview. The token and exchange_url are shown only in this response.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `sandbox_id` | string | yes | The sandbox id. |
+| `preview_id` | string | yes | The preview id (e.g. pv-...). |
+| `ttl_seconds` | integer | no | Grant lifetime in seconds (0 or omitted uses the service default). |
+
+### `preview_grant_list`
+
+List a preview's access grants. Tokens are never returned here.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `sandbox_id` | string | yes | The sandbox id. |
+| `preview_id` | string | yes | The preview id (e.g. pv-...). |
+
+### `preview_grant_renew`
+
+Extend an access grant's lifetime.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `sandbox_id` | string | yes | The sandbox id. |
+| `preview_id` | string | yes | The preview id (e.g. pv-...). |
+| `grant_id` | string | yes | The grant id. |
+| `ttl_seconds` | integer | no | Grant lifetime in seconds (0 or omitted uses the service default). |
+
+### `preview_grant_revoke`
+
+Revoke an access grant so its token stops working.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `sandbox_id` | string | yes | The sandbox id. |
+| `preview_id` | string | yes | The preview id (e.g. pv-...). |
+| `grant_id` | string | yes | The grant id. |
 
 ## Jobs
 
-A job is a managed run of a command or script — on a new sandbox (created and, by default, deleted for you) or an existing one. `wait: false` (the default) returns a `run_id` immediately; `wait: true` blocks for the result.
+Managed one-off runs of a command or script.
 
 ### `job_create`
 
-Create and start a job run.
+Run or start a job on a new or existing sandbox. wait=false (default) starts durably and returns run_id immediately (202); wait=true blocks for the result, bounded by the caller's own request timeout (200).
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `job` | object | yes | The job spec — exactly one of `new_sandbox`/`existing_sandbox_id` and exactly one of `cmd`/`script`. |
-| `job.new_sandbox` | object | one of | `{ template_id?, ... }` — creates a sandbox for this run. |
-| `job.existing_sandbox_id` | string | one of | Run on a sandbox that already exists. |
-| `job.cmd` | array of string | one of | Argv to run. |
-| `job.script` | string | one of | A shell script to run instead of `cmd`. |
-| `job.disposition` | enum: `delete`, `keep` | no | What happens to a sandbox the job itself created once the run ends. Default `delete`. Ignored for `existing_sandbox_id`. |
-| `wait` | boolean | no | If true, block until the run finishes instead of returning immediately with a `run_id`. |
-
-**Returns:** `{ run: { run_id, status, result? } }` — `result` (`{ exit_code, stdout, stderr, ... }`) is present once the run completes, whether or not you waited for it.
-
-<Note>
-There's no endpoint to edit a run in place: to "edit and rerun" one, call `job_get` for its stored `job` spec, change what you need, and pass it to `job_create` as a new run.
-</Note>
+| `job` | object | yes | Exactly one of existing_sandbox_id/new_sandbox is required, and exactly one of cmd/script is required. |
 
 ### `job_list`
 
-List job runs, optionally filtered to one sandbox. Paginated.
+List a tenant's job runs, newest first. Paginated; optionally filtered by sandbox or schedule.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `sandbox_id` | string | no | Restrict to runs on this sandbox. |
+| `sandbox_id` | string | no | Filter to runs on this sandbox. |
+| `schedule_id` | string | no | Filter to runs fired by this schedule. |
 | `page_size` | integer | no | Page size. |
 | `page_token` | string | no | Pagination token from a previous response. |
 
-**Returns:** `{ runs: [...], next_page_token? }` — each entry is a run summary, not the full detail `job_get` returns.
-
 ### `job_get`
 
-Fetch a single run's full detail, including its stored `job` spec and activity timeline.
+Full run detail: status, result, and an activity timeline, plus the stored job spec that started it. Since there is no endpoint to edit a run in place, to 'edit and rerun' a run: call job_get, modify the returned job object, and pass it to job_create as a new run.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `run_id` | string | yes | The job run id. |
-
-**Returns:** `{ run: { run_id, status, spec, timeline, result? } }`.
+| `run_id` | string | yes | The job run id (e.g. as returned by job_create or job_list). |
 
 ### `job_cancel`
 
-Request cancellation of a running job. Cancels rather than terminates — the run's own cleanup (e.g. deleting a sandbox it created) still executes.
+Request cancellation of a running job. This cancels rather than terminates, so the run's own cleanup (e.g. deleting a sandbox it created) still executes.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `run_id` | string | yes | The job run id. |
-
-**Returns:** `{ ok: true, canceled: "<run_id>" }`.
+| `run_id` | string | yes | The job run id (e.g. as returned by job_create or job_list). |
 
 ## Job schedules
 
-A schedule wraps a `job` spec (the same shape `job_create` takes) with timing: `cron_expressions`, `interval_s`, or a one-shot `run_at_unix_nanos` — exactly one of the three.
+Cron, interval or one-shot triggers for a job.
 
 ### `job_schedule_create`
 
+Create a durable cron, interval, or one-shot trigger for a job. Exactly one of cron_expressions/interval_s/run_at_unix_nanos is required. A one-shot schedule is run_at_unix_nanos set (refused if in the past), not a separate mechanism.
+
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `schedule` | object | yes | Timing — exactly one of `cron_expressions`, `interval_s`, `run_at_unix_nanos`. |
-| `job` | object | yes | The job spec to run on each fire, same shape as `job_create`'s `job`. |
-
-**Returns:** `{ schedule: { schedule_id, next_run_at_unix_nanos, ... } }`.
+| `cron_expressions` | string[] | no | Cron expressions to fire on. |
+| `interval_s` | integer | no | Fire every N seconds. |
+| `run_at_unix_nanos` | number | no | One-shot: a single future calendar time (unix nanos). Refused if in the past. |
+| `time_zone` | string | no | IANA zone, e.g. US/Pacific. Empty is UTC. |
+| `jitter_s` | integer | no | Random delay added to each fire, in seconds. |
+| `overlap` | `skip` \| `buffer_one` \| `allow_all` | no | What a fire does when the previous run is still going (default 'skip', which drops the new fire). |
+| `paused` | boolean | no | Create the schedule already paused (default false). |
+| `job` | object | yes | Exactly one of existing_sandbox_id/new_sandbox is required, and exactly one of cmd/script is required. |
 
 ### `job_schedule_list`
 
-**Returns:** `{ schedules: [...] }`.
+List a tenant's job schedules. Paginated.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `page_size` | integer | no | Page size. |
+| `page_token` | string | no | Pagination token from a previous response. |
 
 ### `job_schedule_get`
 
+Fetch a job schedule, including its timing, stored job spec, pause state, next run time, and recent/running run ids.
+
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `schedule_id` | string | yes | The schedule id. |
-
-**Returns:** `{ schedule: { ..., recent_run_ids } }` — `recent_run_ids` holds the last 10 fires' run ids (oldest first, including manual triggers), each a valid `job_get` id.
+| `schedule_id` | string | yes | The job schedule id (e.g. as returned by job_schedule_create or job_schedule_list). |
 
 ### `job_schedule_update`
 
-Replaces the whole schedule — re-send every field you want to keep, not just the one you're changing.
+Replace a job schedule's timing and/or job spec. Same body shape and same-field requirements as job_schedule_create (exactly one of cron_expressions/interval_s/run_at_unix_nanos).
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `schedule_id` | string | yes | The schedule id. |
-| `schedule` | object | yes | Full replacement timing spec. |
-| `job` | object | yes | Full replacement job spec. |
-
-**Returns:** `{ schedule: {...} }`.
+| `schedule_id` | string | yes | The job schedule id (e.g. as returned by job_schedule_create or job_schedule_list). |
+| `cron_expressions` | string[] | no | Cron expressions to fire on. |
+| `interval_s` | integer | no | Fire every N seconds. |
+| `run_at_unix_nanos` | number | no | One-shot: a single future calendar time (unix nanos). Refused if in the past. |
+| `time_zone` | string | no | IANA zone, e.g. US/Pacific. Empty is UTC. |
+| `jitter_s` | integer | no | Random delay added to each fire, in seconds. |
+| `overlap` | `skip` \| `buffer_one` \| `allow_all` | no | What a fire does when the previous run is still going (default 'skip', which drops the new fire). |
+| `paused` | boolean | no | Whether the schedule is paused. |
+| `job` | object | yes | Exactly one of existing_sandbox_id/new_sandbox is required, and exactly one of cmd/script is required. |
 
 ### `job_schedule_delete`
 
+Permanently delete a job schedule. Does not cancel any run currently in flight.
+
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `schedule_id` | string | yes | The schedule id. |
-
-**Returns:** `{ ok: true, deleted: "<schedule_id>" }`.
+| `schedule_id` | string | yes | The job schedule id (e.g. as returned by job_schedule_create or job_schedule_list). |
 
 ### `job_schedule_pause`
 
-Pause or resume a schedule without deleting it.
+Set a job schedule's paused state.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `schedule_id` | string | yes | The schedule id. |
-| `paused` | boolean | yes | `true` to pause, `false` to resume. |
-| `note` | string | no | Optional note recorded with the pause/resume. |
-
-**Returns:** `{ schedule: {...} }`.
+| `schedule_id` | string | yes | The job schedule id (e.g. as returned by job_schedule_create or job_schedule_list). |
+| `paused` | boolean | yes | true to pause, false to resume. |
+| `note` | string | no | Optional note recorded alongside the pause/resume. |
 
 ### `job_schedule_trigger`
 
-Fires one run immediately, ignoring the schedule's own timing — useful for testing a schedule without waiting for it.
+Fire one run of a job schedule immediately, overriding the schedule's own timing.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `schedule_id` | string | yes | The schedule id. |
-
-**Returns:** `{ ok: true, run_id }`.
+| `schedule_id` | string | yes | The job schedule id (e.g. as returned by job_schedule_create or job_schedule_list). |
 
 ## Templates
 
+Saved, versioned launch configurations.
+
 ### `template_list`
 
-Lists every `template_id`/version `sandbox_create` and `job_create` will accept, with metadata (OS, installed language stacks, which AI agent CLIs are preinstalled) to help pick one. Not paginated — the catalog is the same for every caller.
+List the organization's saved templates (launch configurations), each at its latest revision. Use a template's id as sandbox_create's template_id.
 
-**Returns:** `{ templates: [{ template_id, version, is_default, metadata }, ...] }`.
+_No parameters._
+
+### `template_get`
+
+Fetch a template, optionally at a specific revision (default: latest).
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `template_id` | string | yes | The template id. |
+| `revision` | integer | no |  |
+
+### `template_create`
+
+Create a template from an image and settings. The image is resolved and validated on save; the template starts at revision 1.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | yes | Template name (unique per organization). |
+| `description` | string | no |  |
+| `config` | object | yes | Template launch configuration. The service resolves the image to a digest and pins secret set revisions on save. |
+
+### `template_update`
+
+Update a template. Omitted fields keep their value. Changing config publishes a new immutable revision; pass revision (the current one) to guard against concurrent edits.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `template_id` | string | yes | The template id. |
+| `name` | string | no |  |
+| `description` | string | no |  |
+| `config` | object | no | Template launch configuration. The service resolves the image to a digest and pins secret set revisions on save. |
+| `revision` | integer | no | Expected current revision. |
+
+### `template_delete`
+
+Permanently delete a template. Existing sandboxes are not affected.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `template_id` | string | yes | The template id. |
+
+## Registry connections
+
+Credentials for pulling private images. Passwords are write-only.
+
+### `registry_connection_list`
+
+List stored credentials for pulling private container images. Passwords are never returned.
+
+_No parameters._
+
+### `registry_connection_create`
+
+Store credentials for a private container registry. The password is write-only.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | yes |  |
+| `registry` | string | yes | Registry host, e.g. ghcr.io. |
+| `username` | string | yes |  |
+| `password` | string | yes | Password or access token (write-only). |
+
+### `registry_connection_update`
+
+Replace a registry connection's name, host, username and password.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `connection_id` | string | yes | The registry connection id. |
+| `name` | string | yes |  |
+| `registry` | string | yes |  |
+| `username` | string | yes |  |
+| `password` | string | yes | Password or access token (write-only). |
+
+### `registry_connection_delete`
+
+Delete a registry connection. Fails if a template still uses it.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `connection_id` | string | yes | The registry connection id. |
+
+### `registry_connection_validate`
+
+Resolve an image through a registry connection and return its digest.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `connection_id` | string | yes | The registry connection id. |
+| `image` | string | yes | Image reference to resolve. |
+
+## Secrets & secret sets
+
+Write-only secrets and named groups of environment variables. Reference secret sets by **name**.
+
+### `secret_list`
+
+List secrets (names and timestamps only; values are write-only and never returned).
+
+_No parameters._
+
+### `secret_create`
+
+Store a write-only secret, bindable to an environment variable in a template (secret_bindings).
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | yes |  |
+| `value` | string | yes | The secret value (write-only). |
+
+### `secret_update`
+
+Replace a secret's name and value.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `secret_id` | string | yes | The secret id. |
+| `name` | string | yes |  |
+| `value` | string | yes | New value (write-only). |
+
+### `secret_delete`
+
+Delete a secret. Fails if a template still binds it.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `secret_id` | string | yes | The secret id. |
+
+### `secret_set_list`
+
+List secret sets: named groups of environment variables you can inject into sandboxes and jobs via secret_sets. Key names are returned, never values.
+
+_No parameters._
+
+### `secret_set_get`
+
+Fetch a secret set (key names and revision; no values).
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `secret_set_id` | string | yes | The secret set id. |
+
+### `secret_set_create`
+
+Create a secret set from environment variable names and values (values are write-only).
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | yes |  |
+| `values` | object | yes | Environment variable name -> value (write-only). |
+
+### `secret_set_update`
+
+Update a secret set; publishes a new revision. Pass revision (the current one) to guard against concurrent edits.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `secret_set_id` | string | yes | The secret set id. |
+| `name` | string | no |  |
+| `values` | object | no | Replacement values (write-only). |
+| `revision` | integer | no | Expected current revision. |
+
+### `secret_set_delete`
+
+Delete a secret set. Fails if a template still references it.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `secret_set_id` | string | yes | The secret set id. |
+
+## Organizations
+
+The organizations your key belongs to; use an id as `BONYA_ORGANIZATION_ID`.
+
+### `organization_list`
+
+List the organizations the API key's user belongs to, with your role in each. Use an organization_id as BONYA_ORGANIZATION_ID to scope this server to it.
+
+_No parameters._
 
 ## Not exposed as tools
 
 <Note>
-The API's WebSocket endpoints (TTY `exec`, session `attach`) are not exposed as tools — they don't fit a request/response MCP tool. `sandbox_exec` covers non-interactive commands via the buffered `POST .../exec` endpoint; `session_create` covers long-running background processes. Sandboxes suspend automatically; `sandbox_resume` is the only explicit lifecycle verb (there is no separate start/stop). Snapshots are managed exclusively through the gRPC SDK and have no REST endpoints, so they are out of scope for this server.
+The API's WebSocket endpoints (TTY `exec` and session `attach`) are not exposed as tools — they don't fit a request/response MCP tool. `sandbox_exec` covers non-interactive commands through the buffered `POST .../exec` endpoint, and `session_create` covers long-running background processes. Identity management (creating organizations, members, invites and API keys) is not available to API keys and is not exposed.
 </Note>
 
 ## Gotchas
 
-- **Sandbox capacity is capped per account** (a low single-digit number by default). If `sandbox_create` or `job_create`'s `new_sandbox` path returns `429 rate_limited: request capacity is exhausted`, you're at your limit — free a slot with `sandbox_delete` or wait for a job-created sandbox to finish, rather than retrying immediately.
+- **Sandbox capacity is capped per account.** If `sandbox_create` or `job_create`'s `new_sandbox` path returns `429 rate_limited`, free a slot with `sandbox_delete` or wait for a job-created sandbox to finish rather than retrying immediately.
 - **`session_kill`'s parameter is `session_name`**, not `name` — easy to get wrong since `session_create` takes `name`.
-- **A job's `disposition` only applies to a sandbox the job itself created** (`new_sandbox`); it's ignored for `existing_sandbox_id`. Default is `delete`, so a job-created sandbox disappears automatically once the run ends, however it ends (including on `job_cancel`).
-- **Errors are RFC 9457 `problem+json`**, surfaced as `Tyto API error <status> (<code>): <message>` — the `code` is the stable machine-readable part if you're branching on error type.
+- **A job's `disposition` only applies to a sandbox the job itself created.** The default is `delete`, so a job-created sandbox disappears once the run ends, however it ends (including on `job_cancel`).
+- **Secret sets are referenced by name**, not id, in `secret_sets` on templates, sandboxes and jobs.
+- **GPU sandboxes** need an `image` (or an image template) and available org GPU quota; check `sandbox_gpu_options`.
+- **Preview grant tokens are shown once**, in the response that creates them.
+- **Errors are RFC 9457 `problem+json`**, surfaced as `Bonya API error <status> (<code>): <message>`. The `code` is the stable machine-readable part.
