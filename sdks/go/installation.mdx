@@ -3,19 +3,19 @@ title: Installation
 description: Install and configure the Go SDK
 ---
 
-The Go SDK's module path is `github.com/bonyai/tyto-go`, package name
-`tyto`. It talks to Tyto over gRPC — the same transport as the CLI.
+The Go SDK's module path is `github.com/bonyai/bonya-sdk-go`, package name
+`bonya`. It talks to the Bonya REST API over HTTPS, and to the sandbox edge over a WebSocket for streaming exec and terminal sessions.
 
 ## Requirements
 
-- Go 1.25 or newer
-- Depends on `google.golang.org/grpc` and `google.golang.org/protobuf`
-- A Tyto API key (`byk_...`)
+- Go 1.24 or newer
+- Depends on `github.com/gorilla/websocket`
+- A Bonya API key (`byk_...`)
 
 ## Install
 
 ```bash
-go get github.com/bonyai/tyto-go
+go get github.com/bonyai/bonya-sdk-go
 ```
 
 ## Configure
@@ -29,10 +29,10 @@ export BONYA_API_KEY=byk_...
 ```
 
 ```go Explicit
-client, err := tyto.NewClient(
-	tyto.WithAPIKey("byk_..."),
-	tyto.WithOrganizationID("org_123"),
-	tyto.WithTimeout(30*time.Second),
+client, err := bonya.NewClient(
+	bonya.WithAPIKey("byk_..."),
+	bonya.WithOrganizationID("org_123"),
+	bonya.WithTimeout(30*time.Second),
 )
 ```
 </CodeGroup>
@@ -55,8 +55,8 @@ development CAs; if the file can't be read, `NewClient` returns an
 `WithTimeout` is the default per-operation deadline; buffered and
 streaming exec calls can override it per call with `ExecOptions.Timeout`.
 `WithMaxRetries` controls SDK retries for retryable control-plane
-operations (create, get, list, delete, resume, snapshot create, snapshot
-delete) — it retries gRPC `UNAVAILABLE` while preserving the same request
+operations (create, get, list, delete, snapshot create, snapshot
+delete) — it retries transient failures while preserving the same request
 and idempotency key where one exists. `WithFilesystemReadLimit` caps bytes
 buffered by `sandbox.ReadFile`.
 
@@ -72,7 +72,7 @@ a CI example.
 Close the client when done:
 
 ```go
-client, err := tyto.NewClient()
+client, err := bonya.NewClient()
 if err != nil {
 	log.Fatal(err)
 }
@@ -89,11 +89,11 @@ import (
 	"fmt"
 	"log"
 
-	tyto "github.com/bonyai/tyto-go"
+	bonya "github.com/bonyai/bonya-sdk-go"
 )
 
 func main() {
-	client, err := tyto.NewClient() // reads BONYA_API_KEY
+	client, err := bonya.NewClient() // reads BONYA_API_KEY
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -106,7 +106,7 @@ func main() {
 	}
 	defer sandbox.Delete(ctx)
 
-	result, err := sandbox.Exec(ctx, []string{"echo", "hello"}, tyto.ExecOptions{Check: true})
+	result, err := sandbox.Exec(ctx, []string{"echo", "hello"}, bonya.ExecOptions{Check: true})
 	if err != nil {
 		log.Fatal(err)
 	}

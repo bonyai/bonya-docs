@@ -3,16 +3,16 @@ title: console
 description: Open an interactive shell in a sandbox
 ---
 
-## `tyto console [sandbox]`
+## `bonya console [sandbox]`
 
 <Info>Aliases: `sh`, `shell`</Info>
 
 Opens an interactive shell in a sandbox — the command you want most of the time.
 
 ```shell
-tyto console            # pick a sandbox, then attach
-tyto console web        # by name
-tyto console sbx-1a2b…  # by id
+bonya console            # pick a sandbox, then attach
+bonya console web        # by name
+bonya console sbx-1a2b…  # by id
 ```
 
 The sandbox argument accepts a name or id interchangeably — see [Sandbox resolution](/cli-reference/overview#how-resolution-works) for exactly how that's decided. Omit it to pick from a list of your sandboxes.
@@ -20,10 +20,10 @@ The sandbox argument accepts a name or id interchangeably — see [Sandbox resol
 ## What it does
 
 1. **Resumes the sandbox** if it's currently suspended, with a spinner while it wakes. Attaching would trigger the wake anyway, but doing it explicitly first means the wait is visible instead of looking like a hang.
-2. **Attaches to the sandbox's `console` session**, creating it if it doesn't exist yet. `console` is a reserved session name used specifically for this command, so repeated runs of `tyto console` land back in the same session rather than piling up new ones.
+2. **Attaches to the sandbox's `console` session**, creating it if it doesn't exist yet. `console` is a reserved session name used specifically for this command, so repeated runs of `bonya console` land back in the same session rather than piling up new ones.
 3. If a `console` session exists but has already finished (exited, killed, or failed), it's replaced with a fresh one rather than reused.
 
-Leaving the console (Ctrl+D, `exit`, or closing the terminal) detaches from the session — it **keeps running** in the sandbox. Running `tyto console` again reattaches to the same place, replaying any scrollback produced while you were away.
+Leaving the console (Ctrl+D, `exit`, or closing the terminal) detaches from the session — it **keeps running** in the sandbox. Running `bonya console` again reattaches to the same place, replaying any scrollback produced while you were away.
 
 ## Flags
 
@@ -38,22 +38,22 @@ Passing `--session` points `console` at a different [managed session](/cli-refer
 
 <CodeGroup>
 ```shell Pick a sandbox interactively
-tyto console
+bonya console
 ```
 
 ```shell By name
-tyto console web
+bonya console web
 ```
 
 ```shell By id
-tyto console sbx-4f1c9a2b3c4d5e6f7a8b9c0d1e2f3a4b
+bonya console sbx-4f1c9a2b3c4d5e6f7a8b9c0d1e2f3a4b
 ```
 
 ```shell Attach to a different session
-tyto console web --session dev
+bonya console web --session dev
 ```
 </CodeGroup>
 
 <Note>
-For full control over managed sessions — listing them, creating one running a specific command, killing one — see [`tyto session`](/cli-reference/session). `console` is a convenient shortcut for the single most common case.
+For full control over managed sessions — listing them, creating one running a specific command, killing one — see [`bonya session`](/cli-reference/session). `console` is a convenient shortcut for the single most common case.
 </Note>

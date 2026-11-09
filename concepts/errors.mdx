@@ -1,15 +1,15 @@
 ---
 title: Errors
-description: How the Tyto API reports failures
+description: How the Bonya API reports failures
 ---
 
-Every non-2xx response from the Tyto API is an [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) `application/problem+json` body.
+Every non-2xx response from the Bonya API is an [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) `application/problem+json` body.
 
 ## Shape
 
 ```json
 {
-  "type": "https://docs.tyto.run/errors/session-exists",
+  "type": "https://docs.bonya.ai/errors/session-exists",
   "title": "Session already exists",
   "status": 409,
   "code": "session_exists",

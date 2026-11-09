@@ -3,33 +3,27 @@ title: Installation
 description: Install and configure the Python SDK
 ---
 
-The Python SDK is published on PyPI as `tyto.run`; the importable package
-is `tyto`, typed with `py.typed`. It's synchronous and talks to Tyto over
-gRPC — the same transport as the CLI.
+The Python SDK is published on PyPI as `bonya`, and the importable package is
+also `bonya`, typed with `py.typed`. It is synchronous. It talks to the Bonya
+REST API over HTTPS (`httpx`), and to the sandbox edge over a WebSocket
+(`websockets`) for streaming exec and terminal sessions.
 
 ## Requirements
 
 - Python 3.10+
-- `grpcio>=1.83,<2`
-- `protobuf>=7.35.1,<8`
-- A Tyto API key (`byk_...`)
+- `httpx>=0.27,<1` and `websockets>=13` (installed automatically)
+- A Bonya API key (`byk_...`)
 
 ## Install
 
 ```bash
-python -m pip install tyto.run
-```
-
-Or from a checkout of the SDK repository:
-
-```bash
-python -m pip install -e .
+python -m pip install bonya
 ```
 
 ## Configure
 
-Every setting has an environment-variable fallback, so the common case
-needs no arguments at all:
+Every setting has an environment-variable fallback, so the common case needs no
+arguments at all:
 
 <CodeGroup>
 ```bash Environment variable
@@ -37,62 +31,58 @@ export BONYA_API_KEY=byk_...
 ```
 
 ```python Explicit
-from tyto import Tyto
+from bonya import Bonya
 
-client = Tyto(
+client = Bonya(
     api_key="byk_...",
     organization_id="org_123",
 )
 ```
 </CodeGroup>
 
-`api_key` can also be passed positionally: `Tyto("byk_...")`.
+`api_key` can also be passed positionally: `Bonya("byk_...")`.
 
 | Argument | Environment variable | Default |
 |---|---|---|
 | `api_key` | `BONYA_API_KEY` | *required* |
+| `endpoint` | `BONYA_ENDPOINT` | `https://api.bonya.ai` |
+| `edge_endpoint` | `BONYA_EDGE_ENDPOINT` | the API endpoint |
 | `organization_id` | `BONYA_ORGANIZATION_ID` | your personal organization |
 | `ca_bundle` | `BONYA_CA_BUNDLE` | system trust store |
 | `timeout` | — | `30` seconds |
 | `max_retries` | — | `2` |
 | `filesystem_read_limit` | — | 64 MiB |
 
-`api_key` is required. `ca_bundle` points to a PEM bundle for private
-development CAs; if it can't be read, the SDK raises `InvalidRequestError`.
+`ca_bundle` points to a PEM bundle for private development CAs; if it can't be
+read, the SDK raises `InvalidRequestError`.
 
-`timeout` is the default per-operation deadline in seconds; buffered and
-streaming exec calls can override it with `timeout=`. `max_retries`
-controls SDK retries for retryable control-plane operations (create, get,
-list, delete, resume, snapshot create, snapshot delete) — it retries gRPC
-`UNAVAILABLE` while preserving the same request and idempotency key where
-one exists. `filesystem_read_limit` caps bytes buffered by
+`timeout` is the default per-operation deadline in seconds; exec calls can
+override it with `timeout=`. `max_retries` controls retries of transient
+failures. Mutations carry an `Idempotency-Key` that the SDK reuses across its
+own retries. `filesystem_read_limit` caps bytes buffered by
 `sandbox.read_file()`.
 
 <Note>
 An empty `organization_id` (or `BONYA_ORGANIZATION_ID=""`) raises
 `InvalidRequestError` rather than silently falling back to your personal
-organization — this avoids CI jobs quietly running against the wrong
-tenant when a variable expansion is empty. See
-[Organizations](/sdks/python/usage#organizations) for the full precedence
-and a CI example.
+organization. See [Organizations](/sdks/python/usage#organizations).
 </Note>
 
-Close the client when done, or use `with`, which does it for you. Calling
-SDK methods after `client.close()` raises `InvalidRequestError`.
+Close the client when done, or use `with`, which does it for you. Calling SDK
+methods after `client.close()` raises `InvalidRequestError`.
 
 ## Quickstart
 
 ```python
-from tyto import Tyto
+from bonya import Bonya
 
-with Tyto() as client:                                     # reads BONYA_API_KEY
-    with client.create_sandbox(template="bonya-dev") as sandbox:
+with Bonya() as client:                       # reads BONYA_API_KEY
+    with client.create_sandbox() as sandbox:  # deleted on the way out
         result = sandbox.exec(["echo", "hello"], check=True)
-        print(result.stdout)                               # hello
+        print(result.stdout)                  # hello
 ```
 
-That is a real VM: it boots in about a second, runs anything Linux runs,
-and is gone when the `with` block exits.
+That is a real VM: it boots in about a second, runs anything Linux runs, and is
+gone when the `with` block exits.
 
-See [Usage](/sdks/python/usage) for the full surface — sessions, files,
-previews, snapshots, and error handling.
+See [Usage](/sdks/python/usage) for the full surface.

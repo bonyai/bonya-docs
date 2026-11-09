@@ -1,12 +1,12 @@
 ---
 title: Authentication
-description: Authenticate to the Tyto API with a personal API key or a session JWT
+description: Authenticate to the Bonya API with a personal API key or a session JWT
 ---
 
 ## Base URL
 
 ```
-https://api.tyto.run
+https://api.bonya.ai
 ```
 
 ## Two ways to authenticate
@@ -62,12 +62,12 @@ export BONYA_ORGANIZATION_ID=org-...
 ```
 
 <Note>
-The CLI also accepts `--endpoint`/`BONYA_ENDPOINT` to point at a non-default deployment — see [CLI configuration](/cli-reference/configuration). The SDKs always talk to `https://api.tyto.run` and don't document an endpoint override.
+The CLI also accepts `--endpoint`/`BONYA_ENDPOINT` to point at a non-default deployment — see [CLI configuration](/cli-reference/configuration). The SDKs always talk to `https://api.bonya.ai` and don't document an endpoint override.
 </Note>
 
 ## Getting a key: device login
 
-`tyto login` uses a three-leg device-login flow: mint a token, approve it in a browser against your already-signed-in dashboard session, then poll until it's approved. No password ever passes through the CLI.
+`bonya login` uses a three-leg device-login flow: mint a token, approve it in a browser against your already-signed-in dashboard session, then poll until it's approved. No password ever passes through the CLI.
 
 <Steps>
   <Step title="Mint a device-login token">
@@ -89,13 +89,13 @@ The CLI also accepts `--endpoint`/`BONYA_ENDPOINT` to point at a non-default dep
     </ResponseField>
 
     ```shell
-    curl -s -X POST https://api.tyto.run/v1/device-login
+    curl -s -X POST https://api.bonya.ai/v1/device-login
     ```
 
     ```json
     {
       "token": "byd_...",
-      "verification_url": "https://tyto.run/device?token=byd_...",
+      "verification_url": "https://bonya.ai/device?token=byd_...",
       "expires_in": 600,
       "interval": 5
     }
@@ -130,7 +130,7 @@ The CLI also accepts `--endpoint`/`BONYA_ENDPOINT` to point at a non-default dep
     An unknown token is `404`. Poll every `interval` seconds (from the mint response) until `status` is `approved` or `expired`.
 
     ```shell
-    curl -s -X POST https://api.tyto.run/v1/device-login/poll \
+    curl -s -X POST https://api.bonya.ai/v1/device-login/poll \
       -H "Content-Type: application/json" \
       -d '{"token": "byd_..."}'
     ```
@@ -144,7 +144,7 @@ The CLI also accepts `--endpoint`/`BONYA_ENDPOINT` to point at a non-default dep
 ## Using the key
 
 ```bash
-curl -s https://api.tyto.run/v1/sandbox \
+curl -s https://api.bonya.ai/v1/sandbox \
   -H "Authorization: Bearer $BONYA_API_KEY"
 ```
 

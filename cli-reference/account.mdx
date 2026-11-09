@@ -3,57 +3,57 @@ title: Account
 description: whoami, logout, and version
 ---
 
-This page covers the **Account** commands that aren't organization-related. See [`tyto org`](/cli-reference/org) for switching organizations and [`tyto login`](/cli-reference/login) for authenticating.
+This page covers the **Account** commands that aren't organization-related. See [`bonya org`](/cli-reference/org) for switching organizations and [`bonya login`](/cli-reference/login) for authenticating.
 
-## `tyto whoami`
+## `bonya whoami`
 
 Shows where the API key, endpoint, and organization id currently in effect each come from.
 
 ```shell
-tyto whoami
+bonya whoami
 ```
 
 ```console
-$ tyto whoami
-api key:         tyto login (saved)
+$ bonya whoami
+api key:         bonya login (saved)
 endpoint:        (not set)
-organization id: tyto login (saved): org-4f1c9a2b3c4d5e6f7a8b9c0d1e2f3a4b
+organization id: bonya login (saved): org-4f1c9a2b3c4d5e6f7a8b9c0d1e2f3a4b
 ```
 
 <Note>
-`whoami` makes **no network call**. It only reports which source — `--flag`, `environment variable`, `tyto login (saved)`, or `(not set)` — each setting resolves from, following the same [precedence order](/cli-reference/configuration#precedence) every other command uses. It never confirms the key is actually valid; use `tyto list` or another real command for that.
+`whoami` makes **no network call**. It only reports which source — `--flag`, `environment variable`, `bonya login (saved)`, or `(not set)` — each setting resolves from, following the same [precedence order](/cli-reference/configuration#precedence) every other command uses. It never confirms the key is actually valid; use `bonya list` or another real command for that.
 </Note>
 
 The API key's value is never printed, even when it's set — only its source. Endpoint and organization id print their actual saved value alongside the source, since those aren't secret.
 
-## `tyto logout`
+## `bonya logout`
 
-Removes the API key (and endpoint/organization id) saved by `tyto login`, by deleting the config file.
+Removes the API key (and endpoint/organization id) saved by `bonya login`, by deleting the config file.
 
 ```shell
-tyto logout
+bonya logout
 ```
 
 ```console
-$ tyto logout
-Removed /Users/you/.config/tyto/config.json
+$ bonya logout
+Removed /Users/you/.config/bonya/config.json
 ```
 
 This only affects the saved login — a `--api-key` flag or `BONYA_API_KEY` environment variable still works after `logout`, since those take priority over (and don't depend on) the saved config.
 
-## `tyto version`
+## `bonya version`
 
 <Info>Alias: `v`</Info>
 
 Prints the installed CLI version.
 
 ```shell
-tyto version
+bonya version
 ```
 
 ```console
-$ tyto version
-tyto version v1.4.0
+$ bonya version
+bonya version v1.4.0
 ```
 
-`tyto --version` prints the same string, and the version is also folded into `tyto --help`'s output next to the `-h` flag. Note that `-v` is short only for the `version` subcommand (`tyto v`) — the root `--version` flag itself has no single-letter shorthand.
+`bonya --version` prints the same string, and the version is also folded into `bonya --help`'s output next to the `-h` flag. Note that `-v` is short only for the `version` subcommand (`bonya v`) — the root `--version` flag itself has no single-letter shorthand.

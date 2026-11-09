@@ -5,12 +5,12 @@ description: Get a small web app running inside a sandbox and reachable at a pub
 
 import { TerminalOutput } from "/snippets/terminal-output.jsx";
 
-Get a small web app running inside a sandbox and reachable at a public preview URL — entirely from the `tyto` CLI. Every command below uses the `bonya-dev` template. If you haven't installed the CLI or logged in yet, start with the [Quickstart](/quickstart).
+Get a small web app running inside a sandbox and reachable at a public preview URL — entirely from the `bonya` CLI. Every command below uses the `bonya-dev` template. If you haven't installed the CLI or logged in yet, start with the [Quickstart](/quickstart).
 
 <Steps>
   <Step title="Create a sandbox">
     ```shell
-    tyto create web --template bonya-dev
+    bonya create web --template bonya-dev
     ```
 
     <TerminalOutput lines={[
@@ -22,7 +22,7 @@ Get a small web app running inside a sandbox and reachable at a public preview U
       [{text: "OPERATION", color: "#626262"}, {text: "  "}, {text: "op-9b913190f1d9b1c64933d9bfd33b4a1b", color: "#626262"}],
       "",
       [{text: "Open a shell with:", color: "#626262"}],
-      [{text: "  "}, {text: "tyto console web", bold: true}],
+      [{text: "  "}, {text: "bonya console web", bold: true}],
     ]} />
   </Step>
 
@@ -30,7 +30,7 @@ Get a small web app running inside a sandbox and reachable at a public preview U
     Snapshots here are one-way checkpoints — there's no `restore` or `list` command in the CLI today (see [Snapshots](/concepts/snapshots)). Treat the id below as an insurance policy you'd manually rebuild from — a fresh sandbox plus reapplying your changes — not a one-command rollback.
 
     ```shell
-    tyto snapshot create web
+    bonya snapshot create web
     ```
 
     <TerminalOutput lines={[
@@ -41,7 +41,7 @@ Get a small web app running inside a sandbox and reachable at a public preview U
 
   <Step title="Make a workspace directory">
     ```shell
-    tyto fs mkdir web /workspace/app
+    bonya fs mkdir web /workspace/app
     ```
 
     <TerminalOutput lines={[
@@ -54,7 +54,7 @@ Get a small web app running inside a sandbox and reachable at a public preview U
 
     ```shell
     tar czf app.tar.gz -C my-app .
-    tyto fs upload web ./app.tar.gz /workspace/app.tar.gz
+    bonya fs upload web ./app.tar.gz /workspace/app.tar.gz
     ```
 
     <TerminalOutput lines={[
@@ -64,13 +64,13 @@ Get a small web app running inside a sandbox and reachable at a public preview U
 
   <Step title="Extract it on the sandbox">
     ```shell
-    tyto exec web -- tar xzf /workspace/app.tar.gz -C /workspace/app
+    bonya exec web -- tar xzf /workspace/app.tar.gz -C /workspace/app
     ```
 
     `tar` prints nothing on success. Confirm the files landed:
 
     ```shell
-    tyto fs ls web /workspace/app
+    bonya fs ls web /workspace/app
     ```
 
     <TerminalOutput lines={[
@@ -87,7 +87,7 @@ Get a small web app running inside a sandbox and reachable at a public preview U
     Nothing guarantees a Node runtime is preinstalled on every template (see [Templates](/concepts/templates)) — check first, and only proceed with `npm install` if it succeeds. `bonya-dev` does include Node:
 
     ```shell
-    tyto exec web -- node --version
+    bonya exec web -- node --version
     ```
 
     <TerminalOutput lines={[
@@ -97,7 +97,7 @@ Get a small web app running inside a sandbox and reachable at a public preview U
 
   <Step title="Install dependencies">
     ```shell
-    tyto exec web --cwd /workspace/app -- npm install
+    bonya exec web --cwd /workspace/app -- npm install
     ```
 
     <TerminalOutput lines={[
@@ -111,7 +111,7 @@ Get a small web app running inside a sandbox and reachable at a public preview U
     A managed session keeps the process running after your terminal disconnects — unlike `exec`, which ends when the connection does (see [Sessions](/concepts/sessions)). `session create` has no `--cwd` flag, so `cd` inside the command itself:
 
     ```shell
-    tyto session create web dev -- sh -c 'cd /workspace/app && npm run dev'
+    bonya session create web dev -- sh -c 'cd /workspace/app && npm run dev'
     ```
 
     <TerminalOutput lines={[
@@ -124,12 +124,12 @@ Get a small web app running inside a sandbox and reachable at a public preview U
 
   <Step title="Publish a preview URL">
     ```shell
-    tyto preview create web 3000 --name app
+    bonya preview create web 3000 --name app
     ```
 
     <TerminalOutput lines={[
       [{text: "ID  ", color: "#626262"}, {text: "  pv-4j25exovxnccyjqpcgpnbpoiue"}],
-      [{text: "URL ", color: "#626262"}, {text: "  https://pv-4j25exovxnccyjqpcgpnbpoiue.preview.tyto.run"}],
+      [{text: "URL ", color: "#626262"}, {text: "  https://pv-4j25exovxnccyjqpcgpnbpoiue.tv.bonya.ai"}],
       [{text: "PORT", color: "#626262"}, {text: "  3000"}],
       [{text: "AUTH", color: "#626262"}, {text: "  "}, {text: "token", color: "#ffd700"}],
       [{text: "NAME", color: "#626262"}, {text: "  app"}],
@@ -140,7 +140,7 @@ Get a small web app running inside a sandbox and reachable at a public preview U
 
   <Step title="Watch it running">
     ```shell
-    tyto session attach web dev
+    bonya session attach web dev
     ```
 
     <TerminalOutput lines={[
@@ -161,10 +161,10 @@ Get a small web app running inside a sandbox and reachable at a public preview U
     Tear down what this page created, in reverse order:
 
     ```shell
-    tyto preview delete web pv-4j25exovxnccyjqpcgpnbpoiue
-    tyto session kill web dev
-    tyto snapshot delete web snp-92670f726baeaa8e4fbf926c73150fe8
-    tyto delete web --force
+    bonya preview delete web pv-4j25exovxnccyjqpcgpnbpoiue
+    bonya session kill web dev
+    bonya snapshot delete web snp-92670f726baeaa8e4fbf926c73150fe8
+    bonya delete web --force
     ```
 
     <TerminalOutput lines={[

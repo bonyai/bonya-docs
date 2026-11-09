@@ -1,7 +1,7 @@
 {
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
-  "name": "Tyto",
+  "name": "Bonya",
   "colors": {
     "primary": "#c6f24e",
     "light": "#c6f24e",
@@ -20,7 +20,7 @@
   "logo": {
     "light": "/logo.svg",
     "dark": "/logo-dark.svg",
-    "href": "https://tyto.run"
+    "href": "https://bonya.ai"
   },
   "redirects": [
     { "source": "/concepts/nests", "destination": "/concepts/sandboxes" },
@@ -148,18 +148,18 @@
     "links": [
       {
         "label": "Support",
-        "href": "mailto:support@tyto.dev"
+        "href": "mailto:support@bonya.ai"
       }
     ],
     "primary": {
       "type": "button",
       "label": "Dashboard",
-      "href": "https://tyto.run/login"
+      "href": "https://bonya.ai/login"
     }
   },
   "footer": {
     "socials": {
-      "github": "https://github.com/bonyai/tyto-docs"
+      "github": "https://github.com/bonyai/bonya-docs"
     }
   }
 }

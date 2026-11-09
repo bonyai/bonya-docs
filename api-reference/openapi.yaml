@@ -1,6 +1,6 @@
-# Sprint 16 public surface (#248, frozen 2026-08-01). Paths are singular by
-# owner ruling. Runtime handlers and constants stay authoritative; this OpenAPI
-# document is the public REST contract exposed behind Caddy.
+# Public Bonya REST API: the surface offered by the CLI and the web console.
+# Charges (top-ups, coupons, invoices, payments, plans) and operator/admin
+# endpoints are intentionally not part of this contract.
 openapi: 3.1.0
 info:
   title: Bonya Compute REST API
@@ -11,16 +11,22 @@ info:
     WebSocket endpoints are HTTP GET upgrades; their options travel in the
     START frame, never in query strings.
 servers:
-  - url: https://api.tyto.run
+  - url: https://api.bonya.ai
     description: Production
 security:
   - personalApiKey: []
   - supabaseJwt: []
 tags:
   - name: Sandboxes
-    description: Create, look up, list, resume, and delete sandboxes.
+    description: Create, look up, list, pause, fork, snapshot, and delete sandboxes.
+  - name: Snapshots
+    description: Named point-in-time copies of a sandbox that new sandboxes can start from.
   - name: Templates
-    description: The deployment's template catalog.
+    description: Saved, versioned launch configurations for sandboxes.
+  - name: Registry Connections
+    description: Credentials for pulling private container images.
+  - name: Secrets
+    description: Write-only secrets and secret sets injected into sandboxes and jobs.
   - name: Previews
     description: Expose a sandbox port as an HTTPS URL.
   - name: Exec
@@ -34,24 +40,352 @@ tags:
   - name: Job Schedules
     description: Cron, interval, or one-shot timing wrapped around a job.
   - name: Organizations
-    description: Organization membership and administration.
+    description: Organization membership, administration and usage reporting.
   - name: Invitations
     description: Invite members to an organization and accept invitations.
-  - name: Billing
-    description: Usage, credit balance, top-ups, coupons, invoices, and payments.
   - name: API Keys
     description: Personal API key management.
   - name: Device Login
     description: Browser-based login for the CLI.
 paths:
+  /v1/templates:
+    get:
+      operationId: listTemplates
+      tags: [Templates]
+      summary: List templates
+      description: The organization's templates, each at its latest revision.
+      parameters:
+        - $ref: '#/components/parameters/OrganizationHeader'
+      responses:
+        '200':
+          description: Templates
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [templates]
+                properties:
+                  templates:
+                    type: array
+                    items: { $ref: '#/components/schemas/Template' }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      operationId: createTemplate
+      tags: [Templates]
+      summary: Create a template
+      description: >-
+        Validates the configuration, resolves the image to a digest, and
+        publishes revision 1.
+      parameters:
+        - $ref: '#/components/parameters/OrganizationHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TemplateWrite' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Template' }
+        default: { $ref: '#/components/responses/Problem' }
+  /v1/templates/{template_id}:
+    parameters:
+      - $ref: '#/components/parameters/TemplateID'
+      - $ref: '#/components/parameters/OrganizationHeader'
+    get:
+      operationId: getTemplate
+      tags: [Templates]
+      summary: Get a template
+      parameters:
+        - name: revision
+          in: query
+          description: A specific revision. Defaults to the latest.
+          schema: { type: integer, minimum: 1 }
+      responses:
+        '200':
+          description: Template
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Template' }
+        default: { $ref: '#/components/responses/Problem' }
+    patch:
+      operationId: updateTemplate
+      tags: [Templates]
+      summary: Update a template
+      description: >-
+        Omitted fields keep their current value. Changing the configuration
+        publishes a new immutable revision.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TemplateWrite' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Template' }
+        default: { $ref: '#/components/responses/Problem' }
+    delete:
+      operationId: deleteTemplate
+      tags: [Templates]
+      summary: Delete a template
+      responses:
+        '204': { description: Deleted }
+        default: { $ref: '#/components/responses/Problem' }
+  /v1/registry-connections:
+    get:
+      operationId: listRegistryConnections
+      tags: [Registry Connections]
+      summary: List registry connections
+      description: Stored credentials for pulling private container images. Passwords are never returned.
+      parameters:
+        - $ref: '#/components/parameters/OrganizationHeader'
+      responses:
+        '200':
+          description: Connections
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [registry_connections]
+                properties:
+                  registry_connections:
+                    type: array
+                    items: { $ref: '#/components/schemas/RegistryConnection' }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      operationId: createRegistryConnection
+      tags: [Registry Connections]
+      summary: Create a registry connection
+      parameters:
+        - $ref: '#/components/parameters/OrganizationHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegistryConnectionWrite' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RegistryConnection' }
+        default: { $ref: '#/components/responses/Problem' }
+  /v1/registry-connections/{connection_id}:
+    parameters:
+      - $ref: '#/components/parameters/RegistryConnectionID'
+      - $ref: '#/components/parameters/OrganizationHeader'
+    patch:
+      operationId: updateRegistryConnection
+      tags: [Registry Connections]
+      summary: Update a registry connection
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegistryConnectionWrite' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RegistryConnection' }
+        default: { $ref: '#/components/responses/Problem' }
+    delete:
+      operationId: deleteRegistryConnection
+      tags: [Registry Connections]
+      summary: Delete a registry connection
+      responses:
+        '204': { description: Deleted }
+        default: { $ref: '#/components/responses/Problem' }
+  /v1/registry-connections/{connection_id}/validate:
+    post:
+      operationId: validateRegistryConnection
+      tags: [Registry Connections]
+      summary: Validate a registry connection
+      description: Resolves an image through the connection and returns its digest.
+      parameters:
+        - $ref: '#/components/parameters/RegistryConnectionID'
+        - $ref: '#/components/parameters/OrganizationHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [image]
+              properties:
+                image: { type: string }
+      responses:
+        '200':
+          description: Resolved
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [image_digest]
+                properties:
+                  image_digest: { type: string }
+        default: { $ref: '#/components/responses/Problem' }
+  /v1/secrets:
+    get:
+      operationId: listSecrets
+      tags: [Secrets]
+      summary: List secrets
+      description: Write-only secrets. Names and timestamps are returned, never values.
+      parameters:
+        - $ref: '#/components/parameters/OrganizationHeader'
+      responses:
+        '200':
+          description: Secrets
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [secrets]
+                properties:
+                  secrets:
+                    type: array
+                    items: { $ref: '#/components/schemas/Secret' }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      operationId: createSecret
+      tags: [Secrets]
+      summary: Create a secret
+      parameters:
+        - $ref: '#/components/parameters/OrganizationHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SecretWrite' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Secret' }
+        default: { $ref: '#/components/responses/Problem' }
+  /v1/secrets/{secret_id}:
+    parameters:
+      - $ref: '#/components/parameters/SecretID'
+      - $ref: '#/components/parameters/OrganizationHeader'
+    patch:
+      operationId: updateSecret
+      tags: [Secrets]
+      summary: Update a secret
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SecretWrite' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Secret' }
+        default: { $ref: '#/components/responses/Problem' }
+    delete:
+      operationId: deleteSecret
+      tags: [Secrets]
+      summary: Delete a secret
+      responses:
+        '204': { description: Deleted }
+        default: { $ref: '#/components/responses/Problem' }
+  /v1/secret-sets:
+    get:
+      operationId: listSecretSets
+      tags: [Secrets]
+      summary: List secret sets
+      description: >-
+        Named groups of environment variables injected into sandboxes and
+        jobs via secret_sets. Key names are returned, never values.
+      parameters:
+        - $ref: '#/components/parameters/OrganizationHeader'
+      responses:
+        '200':
+          description: Secret sets
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [secret_sets]
+                properties:
+                  secret_sets:
+                    type: array
+                    items: { $ref: '#/components/schemas/SecretSet' }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      operationId: createSecretSet
+      tags: [Secrets]
+      summary: Create a secret set
+      parameters:
+        - $ref: '#/components/parameters/OrganizationHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SecretSetWrite' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SecretSet' }
+        default: { $ref: '#/components/responses/Problem' }
+  /v1/secret-sets/{secret_set_id}:
+    parameters:
+      - $ref: '#/components/parameters/SecretSetID'
+      - $ref: '#/components/parameters/OrganizationHeader'
+    get:
+      operationId: getSecretSet
+      tags: [Secrets]
+      summary: Get a secret set
+      responses:
+        '200':
+          description: Secret set
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SecretSet' }
+        default: { $ref: '#/components/responses/Problem' }
+    patch:
+      operationId: updateSecretSet
+      tags: [Secrets]
+      summary: Update a secret set
+      description: Publishes a new revision. Pass the current revision to guard against concurrent edits.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SecretSetWrite' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SecretSet' }
+        default: { $ref: '#/components/responses/Problem' }
+    delete:
+      operationId: deleteSecretSet
+      tags: [Secrets]
+      summary: Delete a secret set
+      responses:
+        '204': { description: Deleted }
+        default: { $ref: '#/components/responses/Problem' }
   /v1/sandbox:
     get:
       operationId: listSandboxes
       tags: [Sandboxes]
       summary: List sandboxes
       description: >-
-        Paginated with page_size/page_token, optionally filtered by states or
-        an exact-match name. DELETED is not a filterable state.
+        Paginated with page_size/page_token, optionally filtered by states.
+        Deleted sandboxes are not listed.
       parameters:
         - $ref: '#/components/parameters/OrganizationHeader'
         - name: page_size
@@ -67,12 +401,10 @@ paths:
             items: { $ref: '#/components/schemas/SandboxState' }
           style: form
           explode: true
-        - name: name
+        - name: include_disposable
           in: query
-          description: >-
-            Exact-match filter. Names are not unique, so this can match more
-            than one sandbox.
-          schema: { type: string }
+          description: Include disposable (job-created) sandboxes.
+          schema: { type: boolean, default: false }
       responses:
         '200':
           description: Sandbox page
@@ -94,7 +426,6 @@ paths:
           in: query
           schema: { type: string, enum: [ready] }
       requestBody:
-        required: true
         content:
           application/json:
             schema: { $ref: '#/components/schemas/SandboxCreate' }
@@ -103,41 +434,31 @@ paths:
           description: Created and ready (wait=ready)
           content:
             application/json:
-              schema:
-                type: object
-                required: [sandbox]
-                properties: { sandbox: { $ref: '#/components/schemas/Sandbox' } }
+              schema: { $ref: '#/components/schemas/Sandbox' }
         '202':
           description: Accepted
           content:
             application/json:
-              schema:
-                type: object
-                required: [sandbox]
-                properties: { sandbox: { $ref: '#/components/schemas/Sandbox' } }
+              schema: { $ref: '#/components/schemas/Sandbox' }
         default: { $ref: '#/components/responses/Problem' }
-  /v1/templates:
+  /v1/sandbox/gpu-options:
     get:
-      operationId: listTemplates
-      tags: [Templates]
-      summary: List templates
-      description: >
-        The deployment's immutable template catalog: every template_id and
-        version Create/RunJob will accept, and which version each template_id
-        resolves to when a caller omits version. Same catalog for every
-        caller; no organization context.
+      operationId: listGpuOptions
+      tags: [Sandboxes]
+      summary: List GPU options
+      description: The GPU type and count combinations a sandbox can be created with.
       responses:
         '200':
-          description: Template catalog
+          description: Options
           content:
             application/json:
               schema:
                 type: object
-                required: [templates]
+                required: [gpu_options]
                 properties:
-                  templates:
+                  gpu_options:
                     type: array
-                    items: { $ref: '#/components/schemas/Template' }
+                    items: { $ref: '#/components/schemas/GpuRequest' }
         default: { $ref: '#/components/responses/Problem' }
   /v1/sandbox/{sandbox_id}:
     parameters:
@@ -152,39 +473,239 @@ paths:
           description: Sandbox
           content:
             application/json:
-              schema:
-                type: object
-                required: [sandbox]
-                properties: { sandbox: { $ref: '#/components/schemas/Sandbox' } }
+              schema: { $ref: '#/components/schemas/Sandbox' }
         default: { $ref: '#/components/responses/Problem' }
     delete:
       operationId: deleteSandbox
       tags: [Sandboxes]
       summary: Delete a sandbox
       description: >-
-        Synchronous teardown. Repeating a delete on an already-deleted
-        (tombstoned) sandbox returns 204; an unknown or cross-org sandbox_id
-        returns 404.
+        Synchronous teardown. Returns the sandbox in its final state. An
+        unknown or cross-org sandbox_id returns 404; a sandbox in a state that
+        cannot be deleted right now (for example waking) returns 409.
       responses:
-        '204': { description: Deleted }
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Sandbox' }
         default: { $ref: '#/components/responses/Problem' }
-  /v1/sandbox/{sandbox_id}/resume:
+  /v1/sandbox/{sandbox_id}/pause:
     post:
-      operationId: resumeSandbox
+      operationId: pauseSandbox
       tags: [Sandboxes]
-      summary: Resume a sandbox
+      summary: Pause a sandbox
       description: >-
-        Synchronously resumes a suspended sandbox. If it was already running,
-        the call is a no-op but still returns 200 with already_running: true.
+        Forces a pause and answers when the requested stage is reached. warm
+        resumes fastest; cold frees more resources. A paused sandbox wakes on
+        keepalive, on exec or file access, or on incoming traffic.
+      parameters:
+        - $ref: '#/components/parameters/SandboxID'
+        - $ref: '#/components/parameters/OrganizationHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [stage]
+              properties:
+                stage: { type: string, enum: [warm, cold] }
+      responses:
+        '200':
+          description: Paused
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Sandbox' }
+        default: { $ref: '#/components/responses/Problem' }
+  /v1/sandbox/{sandbox_id}/keepalive:
+    post:
+      operationId: keepaliveSandbox
+      tags: [Sandboxes]
+      summary: Hold a sandbox awake
+      description: >-
+        Places an expiring keep-awake hold. A paused sandbox is woken. Returns
+        503 with Retry-After while the wake is in progress.
+      parameters:
+        - $ref: '#/components/parameters/SandboxID'
+        - $ref: '#/components/parameters/OrganizationHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [for]
+              properties:
+                for:
+                  type: string
+                  description: Hold duration as a Go duration, for example 30m or 2h.
+      responses:
+        '200':
+          description: Hold placed
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Sandbox'
+                  - type: object
+                    required: [keepalive_until]
+                    properties:
+                      keepalive_until: { type: string, format: date-time }
+        default: { $ref: '#/components/responses/Problem' }
+  /v1/sandbox/{sandbox_id}/capability:
+    post:
+      operationId: mintSandboxCapability
+      tags: [Sandboxes]
+      summary: Mint an exec capability
+      description: >-
+        Issues a fresh exec capability token for a sandbox whose earlier token
+        has expired. Existing unexpired tokens stay valid.
       parameters:
         - $ref: '#/components/parameters/SandboxID'
         - $ref: '#/components/parameters/OrganizationHeader'
       responses:
         '200':
-          description: Running
+          description: Capability
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/SandboxResume' }
+              schema:
+                type: object
+                required: [capability_jws, expires_at, authority_generation]
+                properties:
+                  capability_jws: { type: string }
+                  expires_at: { type: string, format: date-time }
+                  authority_generation: { type: integer }
+        default: { $ref: '#/components/responses/Problem' }
+  /v1/sandbox/{sandbox_id}/network:
+    patch:
+      operationId: updateSandboxNetwork
+      tags: [Sandboxes]
+      summary: Replace the network policy
+      parameters:
+        - $ref: '#/components/parameters/SandboxID'
+        - $ref: '#/components/parameters/OrganizationHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NetworkPolicy' }
+      responses:
+        '200':
+          description: Updated sandbox (see network_revision and network_applied_revision)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Sandbox' }
+        default: { $ref: '#/components/responses/Problem' }
+  /v1/sandbox/{sandbox_id}/fork:
+    post:
+      operationId: forkSandbox
+      tags: [Sandboxes]
+      summary: Fork a sandbox
+      description: >-
+        Creates count new sandboxes with the source's memory and disk, on the
+        source's node. 201 when every child is running, 200 when some failed
+        (see each child's state), 202 on a repeat whose first fork is still
+        running.
+      parameters:
+        - $ref: '#/components/parameters/SandboxID'
+        - $ref: '#/components/parameters/OrganizationHeader'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [count]
+              properties:
+                count: { type: integer, minimum: 1 }
+      responses:
+        '200': { $ref: '#/components/responses/ForkResult' }
+        '201': { $ref: '#/components/responses/ForkResult' }
+        '202': { $ref: '#/components/responses/ForkResult' }
+        default: { $ref: '#/components/responses/Problem' }
+  /v1/sandbox/{sandbox_id}/snapshots:
+    parameters:
+      - $ref: '#/components/parameters/SandboxID'
+      - $ref: '#/components/parameters/OrganizationHeader'
+    get:
+      operationId: listSnapshots
+      tags: [Snapshots]
+      summary: List a sandbox's snapshots
+      responses:
+        '200':
+          description: Snapshots
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [snapshots]
+                properties:
+                  snapshots:
+                    type: array
+                    items: { $ref: '#/components/schemas/Snapshot' }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      operationId: createSnapshot
+      tags: [Snapshots]
+      summary: Create a named snapshot
+      description: 201 once published; 202 on a repeat whose first write is still running.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name]
+              properties:
+                name: { type: string }
+      responses:
+        '201':
+          description: Published
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Snapshot' }
+        '202':
+          description: In progress
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Snapshot' }
+        default: { $ref: '#/components/responses/Problem' }
+  /v1/snapshot/{snapshot_id}:
+    parameters:
+      - name: snapshot_id
+        in: path
+        required: true
+        schema: { type: string }
+      - $ref: '#/components/parameters/OrganizationHeader'
+    get:
+      operationId: getSnapshot
+      tags: [Snapshots]
+      summary: Get a snapshot
+      responses:
+        '200':
+          description: Snapshot
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Snapshot' }
+        default: { $ref: '#/components/responses/Problem' }
+    delete:
+      operationId: deleteSnapshot
+      tags: [Snapshots]
+      summary: Delete a snapshot
+      responses:
+        '200':
+          description: Deleted snapshot
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Snapshot' }
         default: { $ref: '#/components/responses/Problem' }
   /v1/sandbox/{sandbox_id}/previews:
     parameters:
@@ -206,7 +727,10 @@ paths:
       operationId: createPreview
       tags: [Previews]
       summary: Create a preview URL
-      description: Returns a token-free URL plus a one-time capability.
+      description: >-
+        Returns the preview. A private preview also returns a grant whose
+        token is shown only on this response; 201 for a new preview, 200 when
+        the Idempotency-Key repeats an earlier create.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -215,6 +739,11 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/PreviewCreateRequest' }
       responses:
+        '200':
+          description: Existing preview (repeat of an earlier create)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PreviewCreateResponse' }
         '201':
           description: Preview created
           content:
@@ -222,20 +751,114 @@ paths:
               schema: { $ref: '#/components/schemas/PreviewCreateResponse' }
         default: { $ref: '#/components/responses/Problem' }
   /v1/sandbox/{sandbox_id}/previews/{preview_id}:
+    parameters:
+      - $ref: '#/components/parameters/SandboxID'
+      - $ref: '#/components/parameters/PreviewID'
+      - $ref: '#/components/parameters/OrganizationHeader'
+    get:
+      operationId: getPreview
+      tags: [Previews]
+      summary: Get a preview URL
+      responses:
+        '200':
+          description: Preview
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Preview' }
+        default: { $ref: '#/components/responses/Problem' }
     delete:
       operationId: deletePreview
       tags: [Previews]
       summary: Delete a preview URL
-      description: >-
-        Idempotent, and deliberately avoids leaking cross-org existence: a
-        preview belonging to another organization behaves the same as one
-        that doesn't exist.
+      description: Returns the deleted preview.
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Preview' }
+        default: { $ref: '#/components/responses/Problem' }
+  /v1/sandbox/{sandbox_id}/previews/{preview_id}/grants:
+    parameters:
+      - $ref: '#/components/parameters/SandboxID'
+      - $ref: '#/components/parameters/PreviewID'
+      - $ref: '#/components/parameters/OrganizationHeader'
+    get:
+      operationId: listPreviewGrants
+      tags: [Previews]
+      summary: List access grants
+      responses:
+        '200':
+          description: Grants (tokens are never returned here)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [grants]
+                properties:
+                  grants:
+                    type: array
+                    items: { $ref: '#/components/schemas/PreviewGrant' }
+        default: { $ref: '#/components/responses/Problem' }
+    post:
+      operationId: createPreviewGrant
+      tags: [Previews]
+      summary: Create an access grant
+      description: The token and exchange_url are shown only on this response.
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PreviewGrantRequest' }
+      responses:
+        '201':
+          description: Grant created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PreviewGrant' }
+        default: { $ref: '#/components/responses/Problem' }
+  /v1/sandbox/{sandbox_id}/previews/{preview_id}/grants/{grant_id}:
+    delete:
+      operationId: revokePreviewGrant
+      tags: [Previews]
+      summary: Revoke an access grant
       parameters:
         - $ref: '#/components/parameters/SandboxID'
         - $ref: '#/components/parameters/PreviewID'
+        - name: grant_id
+          in: path
+          required: true
+          schema: { type: string }
         - $ref: '#/components/parameters/OrganizationHeader'
       responses:
-        '204': { description: Deleted }
+        '200':
+          description: Revoked grant
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PreviewGrant' }
+        default: { $ref: '#/components/responses/Problem' }
+  /v1/sandbox/{sandbox_id}/previews/{preview_id}/grants/{grant_id}/renew:
+    post:
+      operationId: renewPreviewGrant
+      tags: [Previews]
+      summary: Renew an access grant
+      parameters:
+        - $ref: '#/components/parameters/SandboxID'
+        - $ref: '#/components/parameters/PreviewID'
+        - name: grant_id
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/OrganizationHeader'
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PreviewGrantRequest' }
+      responses:
+        '200':
+          description: Renewed grant
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PreviewGrant' }
         default: { $ref: '#/components/responses/Problem' }
   /v1/sandbox/{sandbox_id}/exec:
     parameters:
@@ -943,18 +1566,10 @@ paths:
       responses:
         '204': { description: Revoked }
         default: { $ref: '#/components/responses/Problem' }
-  # Billing (Phase 8, docs/billing-dashboard-api.md). Owner or the narrowly
-  # scoped billing role only: a member may spend an organization's credit but
-  # must not see its balance, alter it, or read invoices/coupons/payments.
-  # requireBillingManager reports 404 for a non-member and 403 for a member,
-  # matching every other organization-scoped route. An unconfigured billing
-  # adapter answers 404 on every operation below, the same answer an unknown
-  # path already gives, so a deployment without billing never confirms one
-  # way or another that the feature exists before a credential is checked.
   /v1/organizations/{organization_id}/usage:
     get:
       operationId: getOrganizationUsage
-      tags: [Billing]
+      tags: [Organizations]
       security:
         - supabaseJwt: []
       summary: Get usage and credit balance
@@ -971,216 +1586,10 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/OrganizationUsageResponse' }
         default: { $ref: '#/components/responses/Problem' }
-  /v1/organizations/{organization_id}/topup-offers:
-    get:
-      operationId: listOrganizationTopUpOffers
-      tags: [Billing]
-      security:
-        - supabaseJwt: []
-      summary: List top-up offers
-      description: >-
-        Owner or billing role. Lists Lago-configured top-up offers. Neither
-        collects payment nor grants credit.
-      parameters:
-        - $ref: '#/components/parameters/OrganizationID'
-      responses:
-        '200':
-          description: Configured offers
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [offers]
-                properties:
-                  offers:
-                    type: array
-                    items: { $ref: '#/components/schemas/TopUpOffer' }
-        default: { $ref: '#/components/responses/Problem' }
-  /v1/organizations/{organization_id}/topup-purchases:
-    post:
-      operationId: startOrganizationTopUpPurchase
-      tags: [Billing]
-      security:
-        - supabaseJwt: []
-      summary: Start a top-up purchase
-      description: >-
-        Owner or billing role. Starts a Lago-hosted checkout for one
-        configured offer and returns its opaque, short-lived payment URL.
-        Reposting the same idempotency_key resumes rather than duplicates an
-        in-flight purchase; no operation here charges payment or grants
-        credit directly. Lago settles the wallet transaction after its own
-        payment flow succeeds.
-      parameters:
-        - $ref: '#/components/parameters/OrganizationID'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [idempotency_key]
-              oneOf:
-                - required: [offer_code]
-                - required: [amount_cents]
-              properties:
-                offer_code: { type: string }
-                amount_cents: { type: integer, format: int64, minimum: 500, maximum: 50000 }
-                idempotency_key: { type: string }
-      responses:
-        '200':
-          description: Checkout started or resumed
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [purchase]
-                properties:
-                  purchase: { $ref: '#/components/schemas/TopUpPurchase' }
-        default: { $ref: '#/components/responses/Problem' }
-  /v1/organizations/{organization_id}/coupons:
-    get:
-      operationId: listOrganizationCoupons
-      tags: [Billing]
-      security:
-        - supabaseJwt: []
-      summary: List coupons
-      description: Owner or billing role. Lists coupons applied to the organization.
-      parameters:
-        - $ref: '#/components/parameters/OrganizationID'
-      responses:
-        '200':
-          description: Applied coupons
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [coupons]
-                properties:
-                  coupons:
-                    type: array
-                    items: { $ref: '#/components/schemas/Coupon' }
-        default: { $ref: '#/components/responses/Problem' }
-    post:
-      operationId: applyOrganizationCoupon
-      tags: [Billing]
-      security:
-        - supabaseJwt: []
-      summary: Apply a coupon
-      description: >-
-        Owner or billing role. Applies a Lago-managed coupon by code; pricing
-        and eligibility remain authoritative in the billing provider.
-      parameters:
-        - $ref: '#/components/parameters/OrganizationID'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [coupon_code]
-              properties:
-                coupon_code: { type: string }
-      responses:
-        '200':
-          description: Coupon applied
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [coupon]
-                properties:
-                  coupon: { $ref: '#/components/schemas/Coupon' }
-        default: { $ref: '#/components/responses/Problem' }
-  /v1/organizations/{organization_id}/invoices:
-    get:
-      operationId: listOrganizationInvoices
-      tags: [Billing]
-      security:
-        - supabaseJwt: []
-      summary: List invoices
-      description: >-
-        Owner or billing role. page is one-based; per_page defaults to 25 and
-        is capped at 50 regardless of the value requested. A listed invoice
-        carries no billed period and no lines: the provider omits them from
-        its collection response, so both are always absent here. Read one
-        invoice to get them.
-      parameters:
-        - $ref: '#/components/parameters/OrganizationID'
-        - name: page
-          in: query
-          schema: { type: integer, minimum: 1, default: 1 }
-        - name: per_page
-          in: query
-          schema: { type: integer, minimum: 1, maximum: 50, default: 25 }
-      responses:
-        '200':
-          description: Invoices
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [invoices]
-                properties:
-                  invoices:
-                    type: array
-                    items: { $ref: '#/components/schemas/Invoice' }
-        default: { $ref: '#/components/responses/Problem' }
-  /v1/organizations/{organization_id}/invoices/{invoice_id}:
-    get:
-      operationId: getOrganizationInvoice
-      tags: [Billing]
-      security:
-        - supabaseJwt: []
-      summary: Get an invoice
-      description: >-
-        Owner or billing role. Carries the full billed period, its line
-        items, and a per-member usage breakdown the provider cannot supply:
-        user ids deliberately never leave the cluster.
-      parameters:
-        - $ref: '#/components/parameters/OrganizationID'
-        - name: invoice_id
-          in: path
-          required: true
-          schema: { type: string }
-      responses:
-        '200':
-          description: Invoice detail
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [invoice]
-                properties:
-                  invoice: { $ref: '#/components/schemas/InvoiceDetail' }
-        default: { $ref: '#/components/responses/Problem' }
-  /v1/organizations/{organization_id}/billing:
-    get:
-      operationId: getOrganizationBilling
-      tags: [Billing]
-      security:
-        - supabaseJwt: []
-      summary: Get a billing overview
-      description: >-
-        Owner or billing role. The Spending header: current calendar period,
-        priced usage so far, entitlement limits, both credit balances, and
-        top-up availability. degraded names any provider-dependent
-        enrichment that was attempted and did not produce a usable value;
-        it is never populated for a value that is legitimately absent (an
-        unprovisioned organization attempts no enrichment and reports an
-        empty degraded).
-      parameters:
-        - $ref: '#/components/parameters/OrganizationID'
-      responses:
-        '200':
-          description: Billing overview
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/BillingOverview' }
-        default: { $ref: '#/components/responses/Problem' }
   /v1/organizations/{organization_id}/usage/breakdown:
     get:
       operationId: getOrganizationUsageBreakdown
-      tags: [Billing]
+      tags: [Organizations]
       security:
         - supabaseJwt: []
       summary: Get a usage breakdown
@@ -1209,7 +1618,7 @@ paths:
   /v1/organizations/{organization_id}/usage/series:
     get:
       operationId: getOrganizationUsageSeries
-      tags: [Billing]
+      tags: [Organizations]
       security:
         - supabaseJwt: []
       summary: Get a usage time series
@@ -1237,35 +1646,6 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/UsageSeries' }
-        default: { $ref: '#/components/responses/Problem' }
-  /v1/organizations/{organization_id}/payments:
-    get:
-      operationId: listOrganizationPayments
-      tags: [Billing]
-      security:
-        - supabaseJwt: []
-      summary: List payments
-      description: >-
-        Owner or billing role. A dated credit-activity ledger merged from
-        paid top-up purchases and promotional grants, local state only --
-        no provider call. page is one-based; per_page defaults to 25 and
-        is capped at 50. Never carries a wallet id, provider transaction
-        id, or payment URL; the idempotency key is the one deliberate
-        exception, letting a billing manager resume a pending checkout.
-      parameters:
-        - $ref: '#/components/parameters/OrganizationID'
-        - name: page
-          in: query
-          schema: { type: integer, minimum: 1, default: 1 }
-        - name: per_page
-          in: query
-          schema: { type: integer, minimum: 1, maximum: 50, default: 25 }
-      responses:
-        '200':
-          description: Payment history
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/PaymentListResponse' }
         default: { $ref: '#/components/responses/Problem' }
   /v1/invitations/accept:
     post:
@@ -1358,7 +1738,7 @@ paths:
       responses:
         '204': { description: Revoked }
         default: { $ref: '#/components/responses/Problem' }
-  # Device-authorization login (#299): `tyto login` opens a browser instead of
+  # Device-authorization login (#299): `bonya login` opens a browser instead of
   # asking for a pasted API key. Three legs, none of them carrying the same
   # credential as the others: mint and poll are unauthenticated at the header
   # level because the token itself is the credential (mirroring how
@@ -1432,6 +1812,26 @@ components:
       scheme: bearer
       description: Personal byk_ API key; user-principal, resolved to a tenant by org context.
   parameters:
+    TemplateID:
+      name: template_id
+      in: path
+      required: true
+      schema: { type: string }
+    RegistryConnectionID:
+      name: connection_id
+      in: path
+      required: true
+      schema: { type: string }
+    SecretID:
+      name: secret_id
+      in: path
+      required: true
+      schema: { type: string }
+    SecretSetID:
+      name: secret_set_id
+      in: path
+      required: true
+      schema: { type: string }
     OrganizationHeader:
       name: X-Bonya-Organization-ID
       in: header
@@ -1484,12 +1884,267 @@ components:
       required: true
       schema: { type: string }
   responses:
+    ForkResult:
+      description: Fork result
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ForkResult' }
     Problem:
       description: RFC 9457 problem
       content:
         application/problem+json:
           schema: { $ref: '#/components/schemas/Problem' }
   schemas:
+    OrganizationUsageResponse:
+      type: object
+      required: [usage, credit]
+      properties:
+        usage:
+          type: object
+          required: [compute_seconds, storage_hours, members]
+          properties:
+            compute_seconds: { type: number }
+            storage_hours: { type: number }
+            members:
+              type: array
+              items: { $ref: '#/components/schemas/BillingMemberUsage' }
+        credit:
+          type: object
+          description: >-
+            The provider's currently settled wallet balance, not the locally
+            cached effective verdict the Create path enforces on; the two can
+            differ because this balance does not subtract uninvoiced usage.
+          required: [balance, blocked]
+          properties:
+            balance: { type: number }
+            blocked: { type: boolean }
+    BillingMemberUsage:
+      type: object
+      description: >-
+        One member's share of usage. An empty user id is the unattributed
+        bucket -- usage whose opening actor record was lost -- reported as
+        unattributed: true rather than an empty user_id, so a consumer cannot
+        mistake it for a member whose id failed to render. Exactly one of
+        user_id or unattributed is present.
+      required: [compute_seconds, storage_hours]
+      properties:
+        user_id: { type: string }
+        unattributed: { type: boolean }
+        compute_seconds: { type: number }
+        storage_hours: { type: number }
+    UsageSeries:
+      type: object
+      required: [currency, period, bucket, points, degraded]
+      properties:
+        currency: { type: string }
+        period: { $ref: '#/components/schemas/BillingPeriod' }
+        bucket: { type: string, enum: [hour, day] }
+        points:
+          type: array
+          description: Only non-empty buckets are included.
+          items: { $ref: '#/components/schemas/UsageSeriesPoint' }
+        degraded:
+          type: array
+          items: { $ref: '#/components/schemas/Degradation' }
+    Degradation:
+      type: string
+      enum: [balance, prices, limits, offers]
+      description: >-
+        One provider-dependent enrichment that was attempted and did not
+        produce a usable value. Never emitted for a value that is
+        legitimately absent.
+    UsageSeriesPoint:
+      type: object
+      required: [from, to, compute_seconds, storage_hours]
+      properties:
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        compute_seconds: { type: number }
+        storage_hours: { type: number }
+        estimated_cents:
+          type: integer
+          format: int64
+          description: >-
+            Present on every point or absent from every point: one price
+            read prices the whole series.
+    BillingPeriod:
+      type: object
+      required: [from, to]
+      properties:
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+    UsageBreakdown:
+      type: object
+      required: [currency, period, services, members, degraded]
+      properties:
+        currency: { type: string }
+        period: { $ref: '#/components/schemas/BillingPeriod' }
+        services:
+          type: array
+          items: { $ref: '#/components/schemas/BillingServiceUsage' }
+        members:
+          type: array
+          items: { $ref: '#/components/schemas/BillingMemberUsage' }
+        degraded:
+          type: array
+          items: { $ref: '#/components/schemas/Degradation' }
+    BillingServiceUsage:
+      type: object
+      required: [metric_code, unit, units]
+      properties:
+        metric_code: { type: string, enum: [nest_compute_seconds, nest_storage_hours] }
+        unit: { type: string }
+        units: { type: number }
+        estimated_cents:
+          type: integer
+          format: int64
+          description: Present only together with share, when prices were read successfully.
+        share:
+          type: number
+          description: >-
+            Has no meaning without a price: it compares metrics measured in
+            different units, so money is the only common unit and there is
+            no unpriced fallback.
+        heaviest:
+          type: object
+          description: Absent when the metric has no recorded usage at all.
+          required: [units]
+          properties:
+            user_id: { type: string }
+            unattributed: { type: boolean }
+            units: { type: number }
+    TemplateConfig:
+      type: object
+      additionalProperties: false
+      description: Launch configuration. Contains secret references, never values.
+      properties:
+        image: { type: string, description: OCI image reference. }
+        image_digest: { type: string, description: Resolved by the service on save. }
+        registry_connection_id: { type: string }
+        cpu: { type: integer }
+        memory_mib: { type: integer }
+        disk_gib: { type: integer }
+        disk_bytes: { type: integer }
+        env:
+          type: object
+          additionalProperties: { type: string }
+        secret_bindings:
+          type: object
+          additionalProperties: { type: string }
+          description: Environment variable name to secret id.
+        secret_sets:
+          type: array
+          items: { type: string }
+          description: Secret set names (see /v1/secret-sets).
+        secret_set_revisions:
+          type: array
+          readOnly: true
+          description: Pinned by the service on save.
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              revision: { type: integer }
+        entrypoint:
+          type: [array, 'null']
+          items: { type: string }
+          description: Null inherits the image default; an array overrides it.
+        command:
+          type: [array, 'null']
+          items: { type: string }
+        working_dir: { type: string }
+        network: { $ref: '#/components/schemas/NetworkPolicy' }
+        previews:
+          type: array
+          items:
+            type: object
+            properties:
+              port: { type: integer }
+              visibility: { type: string }
+    Template:
+      type: object
+      required: [id, organization_id, name, revision, config, created_at, updated_at]
+      properties:
+        id: { type: string }
+        organization_id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        revision: { type: integer, description: Increases with each published configuration. }
+        config: { $ref: '#/components/schemas/TemplateConfig' }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    TemplateWrite:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string }
+        description: { type: string }
+        config: { $ref: '#/components/schemas/TemplateConfig' }
+        revision:
+          type: integer
+          description: Expected current revision, to guard against concurrent edits.
+    RegistryConnection:
+      type: object
+      required: [id, organization_id, name, registry, username, created_at, updated_at]
+      properties:
+        id: { type: string }
+        organization_id: { type: string }
+        name: { type: string }
+        registry: { type: string }
+        username: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    RegistryConnectionWrite:
+      type: object
+      additionalProperties: false
+      required: [name, registry, username, password]
+      properties:
+        name: { type: string }
+        registry: { type: string }
+        username: { type: string }
+        password: { type: string, writeOnly: true }
+    Secret:
+      type: object
+      required: [id, organization_id, name, created_at, updated_at]
+      properties:
+        id: { type: string }
+        organization_id: { type: string }
+        name: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    SecretWrite:
+      type: object
+      additionalProperties: false
+      required: [name, value]
+      properties:
+        name: { type: string }
+        value: { type: string, writeOnly: true }
+    SecretSet:
+      type: object
+      required: [id, organization_id, name, revision, keys, environment_bytes, created_at, updated_at]
+      properties:
+        id: { type: string }
+        organization_id: { type: string }
+        name: { type: string }
+        revision: { type: integer }
+        keys:
+          type: array
+          items: { type: string }
+        environment_bytes: { type: integer }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    SecretSetWrite:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string }
+        values:
+          type: object
+          writeOnly: true
+          additionalProperties: { type: string }
+        revision:
+          type: integer
+          description: Expected current revision, to guard against concurrent edits.
     Problem:
       type: object
       required: [type, title, status, code]
@@ -1501,24 +2156,49 @@ components:
         detail: { type: string }
     SandboxState:
       type: string
-      enum: [CREATING, RUNNING, SUSPENDING, SUSPENDED, RESUMING, FAILED]
+      enum: [creating, running, warm, cooling, cold, waking, deleting, deleted, failed, lost]
+    ImageRef:
+      type: object
+      required: [reference]
+      properties:
+        reference: { type: string }
+        digest: { type: string }
+    GpuRequest:
+      type: object
+      required: [type, count]
+      properties:
+        type: { type: string }
+        count: { type: integer, minimum: 1 }
     Sandbox:
       type: object
-      required: [sandbox_id, operation_id, template_id, template_version, state]
+      required: [id, name, organization_id, template_version, state, generation, vcpus, memory_mib, user_layer_bytes, created_at, network, network_revision, network_applied_revision]
       properties:
-        sandbox_id: { type: string }
-        operation_id: { type: string }
-        template_id: { type: string }
+        id: { type: string, description: 'Sandbox id, for example sb-bpyk22c3ei3hfx.' }
+        name: { type: string }
+        organization_id: { type: string }
         template_version: { type: string }
         state: { $ref: '#/components/schemas/SandboxState' }
-        failure_code: { type: string }
-        failure_message: { type: string }
-        # Absent on sandboxes created before names existed; every other
-        # response carries one, generated when create did not supply it.
-        name: { type: string }
-        # Absent on the response to create, which does not carry it; present
-        # on get and list. Stable across suspend/resume.
+        generation: { type: integer }
+        vcpus: { type: integer }
+        memory_mib: { type: integer }
+        user_layer_bytes: { type: integer }
+        failure_reason: { type: string }
         created_at: { type: string, format: date-time }
+        started_at: { type: string, format: date-time }
+        deleted_at: { type: string, format: date-time }
+        parent_snapshot_id: { type: string, description: The named snapshot it was created from. }
+        forked_from_sandbox_id: { type: string }
+        pause_source: { type: string, description: 'Who paused it: idle, requested, memory_pressure.' }
+        network: { $ref: '#/components/schemas/NetworkPolicy' }
+        network_revision: { type: integer }
+        network_applied_revision:
+          type: integer
+          description: Revision the node is known to enforce; below network_revision until a change is applied.
+        image: { $ref: '#/components/schemas/ImageRef' }
+        gpu: { $ref: '#/components/schemas/GpuRequest' }
+        exec_capability_jws:
+          type: string
+          description: Exec capability token, present on responses that carry one.
     SandboxPage:
       type: object
       required: [sandboxes, next_page_token]
@@ -1529,31 +2209,54 @@ components:
         next_page_token: { type: string }
     SandboxCreate:
       type: object
+      additionalProperties: false
       properties:
         template_id:
           type: string
           description: >-
-            Omit to use the deployment's configured default template, if it
-            has one; otherwise required.
+            Omit to use the deployment's configured default template.
+        template_revision: { type: integer }
         template_version: { type: string }
+        snapshot: { type: string, description: Snapshot id to start from. }
+        image: { type: string, description: OCI image reference. }
+        gpu:
+          allOf:
+            - $ref: '#/components/schemas/GpuRequest'
+          description: >-
+            Requests a GPU sandbox. Requires image (or an image template);
+            cannot be combined with snapshot or template_version. Valid
+            type/count pairs come from GET /v1/sandbox/gpu-options, which is
+            empty when no GPU capacity is configured. Subject to the
+            organization's concurrent-GPU limit.
         network: { $ref: '#/components/schemas/NetworkPolicy' }
+        env:
+          type: object
+          additionalProperties: { type: string }
+        secret_sets:
+          type: array
+          items: { type: string }
+          description: Secret set names (see /v1/secret-sets).
         # Optional display label. Blank or omitted means the service generates
         # a friendly one. Names are not unique and address nothing: every
-        # lookup is by sandbox_id.
+        # lookup is by sandbox id.
         name: { type: string, maxLength: 80 }
     NetworkPolicy:
       type: object
       additionalProperties: false
+      required: [mode]
       properties:
-        mode: { type: string, enum: [standard, deny_all, custom], default: standard }
+        mode:
+          type: string
+          enum: [open, allowlist, airgap]
+          default: open
+          description: open is unrestricted egress; allowlist allows only the listed destinations; airgap has no network.
         allow:
           type: array
           maxItems: 64
           items: { $ref: '#/components/schemas/NetworkRule' }
       allOf:
         - if:
-            required: [mode]
-            properties: { mode: { const: custom } }
+            properties: { mode: { const: allowlist } }
           then:
             required: [allow]
             properties: { allow: { minItems: 1 } }
@@ -1562,64 +2265,92 @@ components:
     NetworkRule:
       type: object
       additionalProperties: false
-      required: [cidr]
+      description: Exactly one of domain or cidr. Per-rule ports are not supported yet.
       properties:
+        domain: { type: string, description: 'A DNS name such as pypi.org or *.pythonhosted.org.' }
         cidr: { type: string }
-        ports:
-          type: array
-          items: { type: integer, minimum: 1, maximum: 65535 }
-    SandboxResume:
+    Snapshot:
       type: object
-      required: [sandbox_id, already_running]
+      required: [id, organization_id, sandbox_id, kind, name, state, template_version, created_at]
       properties:
+        id: { type: string, description: 'Snapshot id, for example snp-s63fo7ewzqc2al.' }
+        organization_id: { type: string }
         sandbox_id: { type: string }
-        already_running: { type: boolean }
+        kind: { type: string, enum: [named] }
+        name: { type: string }
+        state: { type: string, description: 'For example published or deleted.' }
+        template_version: { type: string }
+        manifest_digest: { type: string }
+        file_bytes: { type: integer }
+        stored_bytes: { type: integer }
+        failure_reason: { type: string }
+        created_at: { type: string, format: date-time }
+        published_at: { type: string, format: date-time }
+        deleted_at: { type: string, format: date-time }
+        image: { $ref: '#/components/schemas/ImageRef' }
+    ForkResult:
+      type: object
+      required: [sandbox_id, from_warm, sandboxes]
+      properties:
+        sandbox_id: { type: string, description: The source sandbox. }
+        from_warm: { type: boolean }
+        sandboxes:
+          type: array
+          items: { $ref: '#/components/schemas/Sandbox' }
     PreviewAuthMode:
       type: string
-      enum: [token, public]
-      default: token
+      enum: [private, public]
+      default: private
       description: >
-        Token mode uses the shipped Roxy browser exchange. The client may
-        navigate once to preview.url with ?bonya_token=capability_jws; Roxy
-        validates it, sets the host-scoped Secure HttpOnly preview cookie, and
-        redirects to the same URL with bonya_token removed before guest
-        content is rendered.
+        private requires a grant token, exchanged once at the grant's
+        exchange_url for a host-scoped cookie; public needs no token.
     Preview:
       type: object
-      required: [preview_id, sandbox_id, port, auth_mode, url, created_at_unix_nanos]
+      required: [id, sandbox_id, port, auth, url, created_by_user_id, created_at]
       properties:
-        preview_id: { type: string, pattern: '^pv-[a-z2-7]{26}$' }
+        id: { type: string, description: 'Preview id, for example pv-e7otwsh2azaf2yzffkqlfcxyya.' }
         sandbox_id: { type: string }
-        port: { type: integer, minimum: 1024, maximum: 65535 }
-        auth_mode: { $ref: '#/components/schemas/PreviewAuthMode' }
-        name:
-          type: string
-          description: Display metadata only; at most 80 UTF-8 bytes.
-        url:
-          type: string
-          format: uri
-          description: Token-free base preview URL.
-        created_at_unix_nanos: { type: integer }
+        port: { type: integer }
+        auth: { $ref: '#/components/schemas/PreviewAuthMode' }
+        url: { type: string, format: uri, description: Token-free preview URL. }
+        created_by_user_id: { type: string }
+        created_at: { type: string, format: date-time }
+        deleted_at: { type: string, format: date-time }
+    PreviewGrant:
+      type: object
+      required: [id, preview_id, created_at, expires_at]
+      properties:
+        id: { type: string }
+        preview_id: { type: string }
+        created_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+        revoked_at: { type: string, format: date-time }
+        token: { type: string, description: Returned only when the grant is created. }
+        exchange_url: { type: string, description: Returned only when the grant is created. }
+    PreviewGrantRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        ttl_seconds: { type: integer, minimum: 0, maximum: 31536000 }
     PreviewCreateRequest:
       type: object
       additionalProperties: false
       required: [port]
       properties:
-        port: { type: integer, minimum: 1024, maximum: 65535 }
-        auth_mode: { $ref: '#/components/schemas/PreviewAuthMode' }
-        name:
-          type: string
-          description: Display metadata only; at most 80 UTF-8 bytes.
+        port: { type: integer }
+        auth: { $ref: '#/components/schemas/PreviewAuthMode' }
+        ttl_seconds:
+          type: integer
+          minimum: 0
+          maximum: 31536000
+          description: Lifetime of the first grant of a private preview.
     PreviewCreateResponse:
-      type: object
-      required: [preview, capability_jws]
-      properties:
-        preview: { $ref: '#/components/schemas/Preview' }
-        capability_jws:
-          type: string
-          description: >
-            Returned only by create. It may be appended as bonya_token for one
-            browser exchange, but must not be stored in URLs or logs.
+      allOf:
+        - $ref: '#/components/schemas/Preview'
+        - type: object
+          properties:
+            grant:
+              $ref: '#/components/schemas/PreviewGrant'
     PreviewListResponse:
       type: object
       required: [previews]
@@ -1632,56 +2363,9 @@ components:
       enum: [owner, member, billing]
       default: member
       description: >-
-        Custom roles are out of scope; the set is closed. billing may consume
-        the billing surface (balances, invoices, coupons, payments, top-ups)
-        but is not an owner: it cannot manage members, invitations, or
+        Custom roles are out of scope; the set is closed. billing is a
+        restricted role that cannot manage members, invitations, or
         organization settings.
-    Template:
-      type: object
-      required: [template_id, version, digest, is_default, metadata]
-      properties:
-        template_id: { type: string }
-        version: { type: string }
-        digest: { type: string }
-        is_default:
-          type: boolean
-          description: >
-            True if this is the version its template_id resolves to when a
-            Create/RunJob request omits version.
-        metadata: { $ref: '#/components/schemas/TemplateMetadata' }
-    TemplateMetadata:
-      type: object
-      description: >
-        What a template actually offers, for both a human choosing one in a
-        UI and an LLM choosing one on a caller's behalf. Every field is
-        optional: a catalog entry the operator never annotated reports every
-        field empty rather than failing to list.
-      properties:
-        description:
-          type: string
-          description: A short, human- and LLM-readable summary of the template's purpose.
-        os:
-          type: string
-          description: >-
-            The guest's base operating system, e.g. "ubuntu". Free text --
-            not validated against a known-OS list.
-        os_version: { type: string, description: 'e.g. "latest" or "24.04".' }
-        stacks:
-          type: array
-          description: Every language/runtime toolchain preinstalled in the template.
-          items: { $ref: '#/components/schemas/TemplateStack' }
-        agent_cli_support:
-          type: array
-          description: >-
-            AI agent CLIs preinstalled and on PATH, e.g. "claude-code",
-            "codex", "gemini-cli".
-          items: { type: string }
-    TemplateStack:
-      type: object
-      required: [name, version]
-      properties:
-        name: { type: string }
-        version: { type: string }
     Organization:
       type: object
       required: [organization_id, name, personal, created_at]
@@ -1733,339 +2417,6 @@ components:
         consumed_at: { type: string, format: date-time }
         consumed_by_user_id: { type: string }
         revoked_at: { type: string, format: date-time }
-    BillingMemberUsage:
-      type: object
-      description: >-
-        One member's share of usage. An empty user id is the unattributed
-        bucket -- usage whose opening actor record was lost -- reported as
-        unattributed: true rather than an empty user_id, so a consumer cannot
-        mistake it for a member whose id failed to render. Exactly one of
-        user_id or unattributed is present.
-      required: [compute_seconds, storage_hours]
-      properties:
-        user_id: { type: string }
-        unattributed: { type: boolean }
-        compute_seconds: { type: number }
-        storage_hours: { type: number }
-    OrganizationUsageResponse:
-      type: object
-      required: [usage, credit]
-      properties:
-        usage:
-          type: object
-          required: [compute_seconds, storage_hours, members]
-          properties:
-            compute_seconds: { type: number }
-            storage_hours: { type: number }
-            members:
-              type: array
-              items: { $ref: '#/components/schemas/BillingMemberUsage' }
-        credit:
-          type: object
-          description: >-
-            The provider's currently settled wallet balance, not the locally
-            cached effective verdict the Create path enforces on; the two can
-            differ because this balance does not subtract uninvoiced usage.
-          required: [balance, blocked]
-          properties:
-            balance: { type: number }
-            blocked: { type: boolean }
-    TopUpOffer:
-      type: object
-      required: [code, name, amount_cents, currency]
-      properties:
-        code: { type: string }
-        name: { type: string }
-        amount_cents: { type: integer, format: int64 }
-        currency: { type: string }
-    TopUpPurchase:
-      type: object
-      description: >-
-        payment_url is an opaque, short-lived HTTPS checkout capability. It
-        settles no charge and grants no credit by itself; Lago marks the
-        wallet transaction settled only after its own payment flow succeeds.
-      required: [offer_code, amount_cents, currency, status, payment_url]
-      properties:
-        offer_code: { type: string }
-        amount_cents: { type: integer, format: int64 }
-        currency: { type: string }
-        status: { type: string }
-        payment_url: { type: string, format: uri }
-    Coupon:
-      type: object
-      required: [coupon_id, code, name, status, amount_cents, amount_cents_remaining, currency, percentage_rate, frequency, frequency_remaining]
-      properties:
-        coupon_id: { type: string }
-        code: { type: string }
-        name: { type: string }
-        status: { type: string }
-        amount_cents: { type: integer, format: int64 }
-        amount_cents_remaining: { type: integer, format: int64 }
-        currency: { type: string }
-        percentage_rate: { type: number }
-        frequency: { type: string }
-        frequency_remaining: { type: integer }
-        expires_at: { type: string, format: date-time }
-    InvoiceLine:
-      type: object
-      required: [code, kind, units, cents]
-      properties:
-        code: { type: string }
-        kind: { type: string }
-        units: { type: number }
-        cents: { type: integer, format: int64 }
-        from: { type: string, format: date-time }
-        to: { type: string, format: date-time }
-    Invoice:
-      type: object
-      description: >-
-        A listed invoice carries no billed period and no lines; the provider
-        omits both from its collection response, so filling them in from the
-        issuing date would attribute usage to the wrong period. Read one
-        invoice to get them. It carries no link to the provider's hosted
-        copy: those URLs are unauthenticated, so they are never included.
-      required:
-        - invoice_id
-        - number
-        - status
-        - payment_status
-        - currency
-        - subtotal_cents
-        - tax_cents
-        - total_cents
-        - prepaid_credit_cents
-        - fees_cents
-        - coupon_cents
-        - prepaid_granted_credit_cents
-        - prepaid_purchased_credit_cents
-        - lines
-      properties:
-        invoice_id: { type: string }
-        number: { type: string }
-        status:
-          type: string
-          enum: [draft, finalized, voided]
-          description: Only a finalized invoice has moved money.
-        payment_status: { type: string }
-        currency: { type: string }
-        issued_on: { type: string, format: date-time }
-        period_from: { type: string, format: date-time }
-        period_to: { type: string, format: date-time }
-        subtotal_cents: { type: integer, format: int64 }
-        tax_cents: { type: integer, format: int64 }
-        total_cents: { type: integer, format: int64 }
-        prepaid_credit_cents:
-          type: integer
-          format: int64
-          description: How much of this invoice was settled from wallets rather than owed.
-        fees_cents: { type: integer, format: int64 }
-        coupon_cents:
-          type: integer
-          format: int64
-          description: The amount Lago actually applied; never a local estimate.
-        prepaid_granted_credit_cents: { type: integer, format: int64 }
-        prepaid_purchased_credit_cents: { type: integer, format: int64 }
-        lines:
-          type: array
-          items: { $ref: '#/components/schemas/InvoiceLine' }
-    InvoiceDetail:
-      allOf:
-        - $ref: '#/components/schemas/Invoice'
-        - type: object
-          required: [members]
-          properties:
-            members:
-              type: array
-              description: >-
-                Per-member breakdown of the billed period. The provider
-                cannot supply this: user ids deliberately never leave the
-                cluster.
-              items: { $ref: '#/components/schemas/BillingMemberUsage' }
-    BillingPeriod:
-      type: object
-      required: [from, to]
-      properties:
-        from: { type: string, format: date-time }
-        to: { type: string, format: date-time }
-    BillingOverview:
-      type: object
-      description: >-
-        credit and limits are independent optional groups, each present
-        only when its own read succeeded (a cached value counts as
-        succeeded); one failing must never suppress the other. top_up is
-        entirely absent when the offer catalog itself could not be read,
-        rather than guessing between allowed and no_offers.
-      required: [currency, provisioned, period, period_usage, sandboxes, degraded]
-      properties:
-        currency: { type: string }
-        provisioned: { type: boolean }
-        period: { $ref: '#/components/schemas/BillingPeriod' }
-        period_usage:
-          type: object
-          required: [compute_seconds, storage_hours]
-          properties:
-            compute_seconds: { type: number }
-            storage_hours: { type: number }
-            estimated_cents:
-              type: integer
-              format: int64
-              description: Absent when current unit prices could not be read.
-        credit:
-          type: object
-          description: >-
-            balance is the provider's currently settled wallet balance.
-            effective_balance is the locally cached verdict the Create path
-            actually enforces on (settled balance minus uninvoiced usage),
-            which can differ from balance. Each of the two pairs
-            (balance/balance_checked_at, effective_balance/blocked/
-            effective_checked_at) is present only when that specific read
-            succeeded.
-          properties:
-            balance: { type: number }
-            balance_checked_at: { type: string, format: date-time }
-            effective_balance: { type: number }
-            blocked: { type: boolean }
-            effective_checked_at: { type: string, format: date-time }
-        limits:
-          type: object
-          description: >-
-            The bonya_compute entitlement. computed_at is the entitlement's
-            own timestamp, which may predate this response when a fresh
-            read failed and a cached value was served instead.
-          properties:
-            max_sandboxes: { type: integer }
-            storage_billing_enabled: { type: boolean }
-            signup_promotion_cents: { type: integer, format: int64 }
-            monthly_promotion_cents: { type: integer, format: int64 }
-            computed_at: { type: string, format: date-time }
-        sandboxes:
-          type: object
-          required: [in_use]
-          properties:
-            in_use:
-              type: integer
-              description: >-
-                Every sandbox except FAILED and DELETED. An observed count,
-                not an admission guarantee: the quota gate also counts
-                in-flight reservations and may transiently run ahead of it.
-        top_up:
-          type: object
-          description: Absent when the offer catalog could not be read.
-          required: [allowed]
-          properties:
-            allowed: { type: boolean }
-            reason:
-              type: string
-              enum: [not_provisioned, purchase_pending, no_offers]
-        degraded:
-          type: array
-          items: { $ref: '#/components/schemas/Degradation' }
-    Degradation:
-      type: string
-      enum: [balance, prices, limits, offers]
-      description: >-
-        One provider-dependent enrichment that was attempted and did not
-        produce a usable value. Never emitted for a value that is
-        legitimately absent.
-    BillingServiceUsage:
-      type: object
-      required: [metric_code, unit, units]
-      properties:
-        metric_code: { type: string, enum: [nest_compute_seconds, nest_storage_hours] }
-        unit: { type: string }
-        units: { type: number }
-        estimated_cents:
-          type: integer
-          format: int64
-          description: Present only together with share, when prices were read successfully.
-        share:
-          type: number
-          description: >-
-            Has no meaning without a price: it compares metrics measured in
-            different units, so money is the only common unit and there is
-            no unpriced fallback.
-        heaviest:
-          type: object
-          description: Absent when the metric has no recorded usage at all.
-          required: [units]
-          properties:
-            user_id: { type: string }
-            unattributed: { type: boolean }
-            units: { type: number }
-    UsageBreakdown:
-      type: object
-      required: [currency, period, services, members, degraded]
-      properties:
-        currency: { type: string }
-        period: { $ref: '#/components/schemas/BillingPeriod' }
-        services:
-          type: array
-          items: { $ref: '#/components/schemas/BillingServiceUsage' }
-        members:
-          type: array
-          items: { $ref: '#/components/schemas/BillingMemberUsage' }
-        degraded:
-          type: array
-          items: { $ref: '#/components/schemas/Degradation' }
-    UsageSeriesPoint:
-      type: object
-      required: [from, to, compute_seconds, storage_hours]
-      properties:
-        from: { type: string, format: date-time }
-        to: { type: string, format: date-time }
-        compute_seconds: { type: number }
-        storage_hours: { type: number }
-        estimated_cents:
-          type: integer
-          format: int64
-          description: >-
-            Present on every point or absent from every point: one price
-            read prices the whole series.
-    UsageSeries:
-      type: object
-      required: [currency, period, bucket, points, degraded]
-      properties:
-        currency: { type: string }
-        period: { $ref: '#/components/schemas/BillingPeriod' }
-        bucket: { type: string, enum: [hour, day] }
-        points:
-          type: array
-          description: Only non-empty buckets are included.
-          items: { $ref: '#/components/schemas/UsageSeriesPoint' }
-        degraded:
-          type: array
-          items: { $ref: '#/components/schemas/Degradation' }
-    Payment:
-      type: object
-      description: >-
-        kind is topup or grant. The topup fields are set when kind is
-        topup; the grant fields (period) are set when kind is grant.
-        Never carries a wallet id, provider transaction id, or payment
-        URL. idempotency_key is deliberately returned so a billing manager
-        can resume a pending checkout by reposting the same offer and key.
-      required: [kind, at]
-      properties:
-        kind: { type: string, enum: [topup, grant] }
-        at: { type: string, format: date-time }
-        idempotency_key: { type: string }
-        offer_code: { type: string }
-        offer_name: { type: string }
-        amount_cents: { type: integer, format: int64 }
-        currency: { type: string }
-        credits: { type: number }
-        status: { type: string, enum: [creating, pending, settled, failed] }
-        invoice_id: { type: string }
-        period: { type: string }
-    PaymentListResponse:
-      type: object
-      required: [payments, has_more]
-      properties:
-        payments:
-          type: array
-          items: { $ref: '#/components/schemas/Payment' }
-        has_more:
-          type: boolean
-          description: The meaningful "no further pages" answer when false; never inferred from a short page.
     APIKey:
       type: object
       required: [key_id, display_prefix, display_last4, created_at]
@@ -2123,32 +2474,32 @@ components:
           description: The approving user's email; present alongside api_key.
     CommandSpec:
       type: object
-      required: [cmd]
+      required: [command]
       properties:
-        cmd:
+        command:
           type: array
           items: { type: string }
           minItems: 1
         env:
           type: object
           additionalProperties: { type: string }
-        path: { type: string }
+        working_dir: { type: string }
     DirectExecRequest:
       allOf:
         - $ref: '#/components/schemas/CommandSpec'
         - type: object
           properties:
-            timeout_s: { type: integer, minimum: 1, maximum: 300 }
+            timeout_ms: { type: integer, minimum: 1 }
             stdin_b64: { type: string, contentEncoding: base64 }
             output_encoding: { type: string, enum: [utf8, base64] }
     DirectExecResponse:
       type: object
-      required: [exit_code, signaled, timed_out, stdout, stderr, stdout_truncated, stderr_truncated, output_encoding]
+      required: [exit_code, stdout, stderr, took_ms, output_encoding]
       properties:
         exit_code: { type: integer }
         signaled: { type: boolean }
         signal: { type: integer }
-        timed_out: { type: boolean }
+        took_ms: { type: number }
         stdout: { type: string }
         stderr: { type: string }
         stdout_truncated: { type: boolean }
@@ -2185,7 +2536,7 @@ components:
           type: array
           items: { type: string }
         working_dir: { type: string }
-        status: { type: string, enum: [UNSPECIFIED, STARTING, IDLE, ATTACHED, EXITED, KILLED, FAILED] }
+        status: { type: string, enum: [unspecified, starting, idle, attached, exited, killed, failed] }
         attached: { type: boolean }
         started_at_unix_nanos: { type: integer }
         last_activity_unix_nanos: { type: integer }
@@ -2246,14 +2597,14 @@ components:
       type: object
       description: >-
         Exactly one of existing_sandbox_id and new_sandbox is required.
-        Exactly one of cmd and script is required.
+        Exactly one of command and script is required.
       properties:
         name:
           type: string
           description: Optional human-readable name for this job.
         existing_sandbox_id: { type: string }
         new_sandbox: { $ref: '#/components/schemas/JobNewSandboxSpec' }
-        cmd:
+        command:
           type: array
           items: { type: string }
         script: { $ref: '#/components/schemas/JobScriptSpec' }
@@ -2266,11 +2617,14 @@ components:
         env:
           type: object
           additionalProperties: { type: string }
-        path: { type: string }
+        secret_sets:
+          type: array
+          items: { type: string }
+          description: Secret set names (see /v1/secret-sets).
+        working_dir: { type: string }
         stdin_b64: { type: string, contentEncoding: base64 }
-        command_timeout_s: { type: integer, minimum: 1 }
-        run_deadline_s: { type: integer, minimum: 1 }
-        max_output_bytes: { type: integer, minimum: 1 }
+        command_timeout_seconds: { type: integer, minimum: 1 }
+        run_deadline_seconds: { type: integer, minimum: 1 }
         disposition:
           type: string
           enum: [delete, keep]
@@ -2278,12 +2632,12 @@ components:
           description: >-
             What happens to a sandbox this run created when the run ends,
             however it ends. Not meaningful for an existing sandbox.
-        resume_if_suspended:
+        wake_if_paused:
           type: boolean
           default: false
           description: >-
-            Applies to an existing sandbox only. False makes a suspended
-            target a failure rather than an implicit resume, which is a
+            Applies to an existing sandbox only. False makes a paused
+            target a failure rather than an implicit wake, which is a
             billable action the caller may not have intended.
         wait:
           type: boolean
@@ -2296,20 +2650,27 @@ components:
       properties:
         template_id:
           type: string
-          description: >-
-            Omit to use the deployment's configured default template, if it
-            has one; otherwise required.
-        version: { type: string }
+          description: Omit to use the deployment's configured default template.
+        template_revision: { type: integer }
+        snapshot: { type: string }
+        image: { type: string }
         name: { type: string }
+        network: { $ref: '#/components/schemas/NetworkPolicy' }
+        env:
+          type: object
+          additionalProperties: { type: string }
+        secret_sets:
+          type: array
+          items: { type: string }
     JobScriptSpec:
       type: object
-      required: [body_b64]
+      required: [body]
       description: >-
         A script the user wrote or uploaded. The body travels inline and is
         capped; a script larger than the cap is a program, and a program
         belongs in the template or fetched by the script itself.
       properties:
-        body_b64: { type: string, contentEncoding: base64 }
+        body: { type: string, description: The script source text. }
         interpreter: { type: string, default: sh }
         args:
           type: array

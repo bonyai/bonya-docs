@@ -5,16 +5,16 @@ description: Create a new sandbox from a template
 
 import { TerminalOutput } from "/snippets/terminal-output.jsx";
 
-## `tyto create [name]`
+## `bonya create [name]`
 
 <Info>Aliases: `new`, `c`</Info>
 
 Starts a new sandbox from a template.
 
 ```shell
-tyto create --template bonya-dev        # generated name
-tyto create web --template bonya-dev    # named "web"
-tyto create                               # deployment default template
+bonya create --template bonya-dev        # generated name
+bonya create web --template bonya-dev    # named "web"
+bonya create                               # deployment default template
 ```
 
 When `--template` is omitted, the CLI uses the deployment's configured default template. The name is optional and **positional** — leave it out and the service generates a friendly one (like `swift-otter-9c3f`), which is printed as part of the result. Names are not unique, so two sandboxes can share the same one.
@@ -34,7 +34,7 @@ When `--template` is omitted, the CLI uses the deployment's configured default t
 If you pass both a positional name and `--name` and they disagree, `create` fails:
 
 ```console
-$ tyto create web --name api --template bonya-dev
+$ bonya create web --name api --template bonya-dev
 name given twice: "web" and --name "api"
 ```
 
@@ -45,7 +45,7 @@ Passing the same value both ways is harmless. In new scripts, prefer the positio
 On an interactive terminal, once the sandbox is ready `create` offers to open a console in it immediately — press Enter to accept (the prompt defaults to yes):
 
 ```console
-$ tyto create --template bonya-dev
+$ bonya create --template bonya-dev
 id           sbx-4f1c9a2b3c4d5e6f7a8b9c0d1e2f3a4b
 name         swift-otter-9c3f
 status       running
@@ -66,19 +66,19 @@ This offer is skipped — and the "open a shell with" hint is printed instead �
 
 <CodeGroup>
 ```shell Generated name
-tyto create --template bonya-dev
+bonya create --template bonya-dev
 ```
 
 ```shell Explicit name
-tyto create web --template bonya-dev
+bonya create web --template bonya-dev
 ```
 
 ```shell Don't wait for the sandbox to be ready
-tyto create --template bonya-dev --wait none
+bonya create --template bonya-dev --wait none
 ```
 
 ```shell Pin a template version
-tyto create --template bonya-dev --version 2024.11
+bonya create --template bonya-dev --version 2024.11
 ```
 </CodeGroup>
 

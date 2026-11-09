@@ -16,13 +16,13 @@ A job is not a replacement for [exec](/concepts/exec) or [managed sessions](/con
 <CodeGroup>
 ```shell cURL
 # run and wait for the result (wait is a body field, not a query param)
-curl -s -X POST "https://api.tyto.run/v1/job" \
+curl -s -X POST "https://api.bonya.ai/v1/job" \
   -H "Authorization: Bearer $BONYA_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"new_sandbox": {"template_id": "bonya-dev"}, "cmd": ["./run-tests.sh"], "wait": true}'
 
 # start durably and check later (wait defaults to false)
-curl -s -X POST "https://api.tyto.run/v1/job" \
+curl -s -X POST "https://api.bonya.ai/v1/job" \
   -H "Authorization: Bearer $BONYA_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"existing_sandbox_id": "'"$SANDBOX_ID"'", "cmd": ["./long-migration.sh"]}'
@@ -42,7 +42,7 @@ const { runId } = await client.startJob({
 ```
 
 ```python Python
-from tyto import JobSandboxSpec, JobSpec
+from bonya import JobSandboxSpec, JobSpec
 
 run = client.run_job(JobSpec(
     new_sandbox=JobSandboxSpec(template="bonya-dev"),
@@ -57,20 +57,20 @@ run_id, already_running = client.start_job(JobSpec(
 ```
 
 ```go Go
-run, err := client.RunJob(ctx, tyto.JobSpec{
-    NewSandbox: &tyto.JobSandboxSpec{Template: "bonya-dev"},
+run, err := client.RunJob(ctx, bonya.JobSpec{
+    NewSandbox: &bonya.JobSandboxSpec{Template: "bonya-dev"},
     Cmd:        []string{"./run-tests.sh"},
 })
 fmt.Println(run.Status, run.Result.ExitCode)
 
-runID, alreadyRunning, err := client.StartJob(ctx, tyto.JobSpec{
+runID, alreadyRunning, err := client.StartJob(ctx, bonya.JobSpec{
     ExistingSandboxID: sandboxID,
     Cmd:               []string{"./long-migration.sh"},
 })
 ```
 </CodeGroup>
 
-There's no `tyto job` CLI command — jobs are reached through REST or an SDK. **MCP:** `job_create` covers both modes — pass `wait: true` to block for the result or leave it `false` to get a `run_id` back immediately.
+There's no `bonya job` CLI command — jobs are reached through REST or an SDK. **MCP:** `job_create` covers both modes — pass `wait: true` to block for the result or leave it `false` to get a `run_id` back immediately.
 
 The request body (`JobRequest`) requires **exactly one** of `existing_sandbox_id`/`new_sandbox`, and **exactly one** of `cmd`/`script`:
 
@@ -121,10 +121,10 @@ A run's `status` moves through the states the job's own command or script produc
 
 <CodeGroup>
 ```shell cURL
-curl -s "https://api.tyto.run/v1/job?sandbox_id=$SANDBOX_ID" \
+curl -s "https://api.bonya.ai/v1/job?sandbox_id=$SANDBOX_ID" \
   -H "Authorization: Bearer $BONYA_API_KEY"
 
-curl -s "https://api.tyto.run/v1/job/$RUN_ID" \
+curl -s "https://api.bonya.ai/v1/job/$RUN_ID" \
   -H "Authorization: Bearer $BONYA_API_KEY"
 ```
 
@@ -146,14 +146,14 @@ print(detail.status, detail.spec, detail.timeline)
 ```
 
 ```go Go
-runs, err := client.ListJobRuns(ctx, tyto.ListJobRunsOptions{SandboxID: sandboxID})
+runs, err := client.ListJobRuns(ctx, bonya.ListJobRunsOptions{SandboxID: sandboxID})
 
 detail, err := client.GetJobRun(ctx, runID)
 fmt.Println(detail.Status, detail.Spec, detail.Timeline)
 ```
 </CodeGroup>
 
-There's no `tyto job` CLI command. **MCP:** `job_list` pages through runs; `job_get` returns one run's full detail.
+There's no `bonya job` CLI command. **MCP:** `job_list` pages through runs; `job_get` returns one run's full detail.
 
 ## Canceling a run
 
@@ -161,7 +161,7 @@ There's no `tyto job` CLI command. **MCP:** `job_list` pages through runs; `job_
 
 <CodeGroup>
 ```shell cURL
-curl -s -X POST "https://api.tyto.run/v1/job/$RUN_ID/cancel" \
+curl -s -X POST "https://api.bonya.ai/v1/job/$RUN_ID/cancel" \
   -H "Authorization: Bearer $BONYA_API_KEY"
 ```
 
@@ -178,7 +178,7 @@ err = client.CancelJobRun(ctx, runID) // requests cancellation; cleanup still ru
 ```
 </CodeGroup>
 
-There's no `tyto job` CLI command. **MCP:** `job_cancel` requests cancellation the same way.
+There's no `bonya job` CLI command. **MCP:** `job_cancel` requests cancellation the same way.
 
 ## Job schedules
 
@@ -186,7 +186,7 @@ A **job schedule** wraps a job spec with timing, so it runs on its own without a
 
 <CodeGroup>
 ```shell cURL
-curl -s -X POST "https://api.tyto.run/v1/job-schedule" \
+curl -s -X POST "https://api.bonya.ai/v1/job-schedule" \
   -H "Authorization: Bearer $BONYA_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"interval_s": 3600, "job": {"new_sandbox": {"template_id": "bonya-dev"}, "cmd": ["./nightly-report.sh"]}}'
@@ -201,7 +201,7 @@ console.log(schedule.scheduleId, schedule.nextRunAtUnixNanos);
 ```
 
 ```python Python
-from tyto import JobSandboxSpec, JobSpec, ScheduleSpec
+from bonya import JobSandboxSpec, JobSpec, ScheduleSpec
 
 schedule = client.create_job_schedule(
     ScheduleSpec(interval_seconds=3600),
@@ -212,14 +212,14 @@ print(schedule.schedule_id, schedule.next_run_at_unix_nanos)
 
 ```go Go
 schedule, err := client.CreateJobSchedule(ctx,
-    tyto.ScheduleSpec{IntervalSeconds: 3600},
-    tyto.JobSpec{NewSandbox: &tyto.JobSandboxSpec{Template: "bonya-dev"}, Cmd: []string{"./nightly-report.sh"}},
+    bonya.ScheduleSpec{IntervalSeconds: 3600},
+    bonya.JobSpec{NewSandbox: &bonya.JobSandboxSpec{Template: "bonya-dev"}, Cmd: []string{"./nightly-report.sh"}},
 )
 fmt.Println(schedule.ScheduleID, schedule.NextRunAtUnixNanos)
 ```
 </CodeGroup>
 
-There's no `tyto job-schedule` CLI command. **MCP:** `job_schedule_create` covers this.
+There's no `bonya job-schedule` CLI command. **MCP:** `job_schedule_create` covers this.
 
 <ParamField body="cron_expressions" type="string[]">
   Cron expressions to fire on. Exactly one of `cron_expressions`/`interval_s`/`run_at_unix_nanos` is required.
@@ -254,10 +254,10 @@ There's no `tyto job-schedule` CLI command. **MCP:** `job_schedule_create` cover
 
 <CodeGroup>
 ```shell cURL
-curl -s "https://api.tyto.run/v1/job-schedule" \
+curl -s "https://api.bonya.ai/v1/job-schedule" \
   -H "Authorization: Bearer $BONYA_API_KEY"
 
-curl -s -X POST "https://api.tyto.run/v1/job-schedule/$SCHEDULE_ID/trigger" \
+curl -s -X POST "https://api.bonya.ai/v1/job-schedule/$SCHEDULE_ID/trigger" \
   -H "Authorization: Bearer $BONYA_API_KEY"
 ```
 
@@ -296,7 +296,7 @@ schedule, err = client.GetJobSchedule(ctx, scheduleID)
 // UpdateJobSchedule replaces the whole schedule -- pass every field you
 // want to keep, not just the one you're changing.
 schedule, err = client.UpdateJobSchedule(ctx, scheduleID,
-    tyto.ScheduleSpec{IntervalSeconds: 7200}, jobSpec)
+    bonya.ScheduleSpec{IntervalSeconds: 7200}, jobSpec)
 
 schedule, err = client.SetJobSchedulePaused(ctx, scheduleID, true, "pausing for maintenance")
 err = client.TriggerJobSchedule(ctx, scheduleID) // fires one run now, ignoring timing
@@ -304,7 +304,7 @@ err = client.DeleteJobSchedule(ctx, scheduleID)
 ```
 </CodeGroup>
 
-There's no `tyto job-schedule` CLI command. **MCP:** `job_schedule_list` and `job_schedule_trigger` cover the calls above (plus `job_schedule_get`, `_update`, `_pause`, and `_delete` for the rest of the surface).
+There's no `bonya job-schedule` CLI command. **MCP:** `job_schedule_list` and `job_schedule_trigger` cover the calls above (plus `job_schedule_get`, `_update`, `_pause`, and `_delete` for the rest of the surface).
 
 ## Related
 

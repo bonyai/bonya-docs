@@ -5,20 +5,20 @@ description: Managed session operations on a sandbox — create, list, attach, k
 
 import { TerminalOutput } from "/snippets/terminal-output.jsx";
 
-## `tyto session`
+## `bonya session`
 
 <Info>Aliases: `sess`, `s`</Info>
 
 Managed sessions are named terminals that keep running after you disconnect, and survive the sandbox suspending and resuming. Reattaching replays what the session produced while nobody was watching.
 
-For the common case — "give me a shell" — use [`tyto console`](/cli-reference/console) instead, which is a shortcut for attaching to a session named `console`. Use `tyto session` directly when you want a named, scriptable session (a dev server, a long build) that isn't the interactive console.
+For the common case — "give me a shell" — use [`bonya console`](/cli-reference/console) instead, which is a shortcut for attaching to a session named `console`. Use `bonya session` directly when you want a named, scriptable session (a dev server, a long build) that isn't the interactive console.
 
 ## `create`
 
 Creates a named managed session running a given command.
 
 ```shell
-tyto session create [sandbox] <name> -- cmd [args...]
+bonya session create [sandbox] <name> -- cmd [args...]
 ```
 
 | Flag | Default | Description |
@@ -28,7 +28,7 @@ tyto session create [sandbox] <name> -- cmd [args...]
 | `--by-name` | `false` | Treat the sandbox argument as a name even if it looks like an id. |
 
 ```shell
-tyto session create web dev -- npm run dev
+bonya session create web dev -- npm run dev
 ```
 
 ## `list`
@@ -36,16 +36,16 @@ tyto session create web dev -- npm run dev
 Lists a sandbox's managed sessions.
 
 ```shell
-tyto session list [sandbox]
+bonya session list [sandbox]
 ```
 
 ```shell
-tyto session list web
+bonya session list web
 ```
 
 If the sandbox is currently suspended, the listing is served from a suspend-time snapshot and the output notes that explicitly.
 
-On a real terminal, `tyto session list` looks like this:
+On a real terminal, `bonya session list` looks like this:
 
 <TerminalOutput lines={[
   [{text: "┌───────────────────────────────────────────────────────────────┐", color: "#444444"}],
@@ -62,7 +62,7 @@ On a real terminal, `tyto session list` looks like this:
 Connects to a running managed session.
 
 ```shell
-tyto session attach [sandbox] <name>
+bonya session attach [sandbox] <name>
 ```
 
 | Flag | Default | Description |
@@ -74,7 +74,7 @@ tyto session attach [sandbox] <name>
 From a terminal, `attach` is fully interactive: stdin is forwarded and window resizes propagate. Piped or redirected, it streams the session's output read-only:
 
 ```shell
-tyto session attach web dev | tee log
+bonya session attach web dev | tee log
 ```
 
 <Warning>
@@ -86,7 +86,7 @@ Attaching **preempts** any other client already attached to that session — onl
 Kills a managed session.
 
 ```shell
-tyto session kill [sandbox] <name> [--signal TERM] [--grace-ms 5000]
+bonya session kill [sandbox] <name> [--signal TERM] [--grace-ms 5000]
 ```
 
 | Flag | Default | Description |
@@ -97,10 +97,10 @@ tyto session kill [sandbox] <name> [--signal TERM] [--grace-ms 5000]
 
 <CodeGroup>
 ```shell Graceful kill (default)
-tyto session kill web dev
+bonya session kill web dev
 ```
 
 ```shell Force kill immediately
-tyto session kill web dev --signal KILL
+bonya session kill web dev --signal KILL
 ```
 </CodeGroup>

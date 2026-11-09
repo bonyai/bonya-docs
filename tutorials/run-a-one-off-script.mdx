@@ -5,7 +5,7 @@ description: Push a script into a disposable sandbox, run it, and see its full r
 
 import { TerminalOutput } from "/snippets/terminal-output.jsx";
 
-Push a script into a disposable sandbox, run it once, and see its full result — no sandbox to create or clean up yourself. `tyto job run` handles all of that: by default it creates a sandbox just for this run and deletes it when the run ends. Every command below uses the deployment's default template; if you haven't installed the CLI or logged in yet, start with the [Quickstart](/quickstart).
+Push a script into a disposable sandbox, run it once, and see its full result — no sandbox to create or clean up yourself. `bonya job run` handles all of that: by default it creates a sandbox just for this run and deletes it when the run ends. Every command below uses the deployment's default template; if you haven't installed the CLI or logged in yet, start with the [Quickstart](/quickstart).
 
 <Steps>
   <Step title="Write the script locally">
@@ -24,7 +24,7 @@ Push a script into a disposable sandbox, run it once, and see its full result �
     `--script` uploads and runs the file in one call; `job run` blocks until it finishes and prints the result. There's no sandbox to create first — one is provisioned for this run and torn down automatically when it's done.
 
     ```shell
-    tyto job run --script ./report.sh --name report
+    bonya job run --script ./report.sh --name report
     ```
 
     <TerminalOutput lines={[
@@ -48,7 +48,7 @@ Push a script into a disposable sandbox, run it once, and see its full result �
     Every run gets an id you can hand to `job get` to see it again, including its full stored spec and timeline — useful if you didn't capture the output the first time:
 
     ```shell
-    tyto job get d40295e5e0c9b89a1359721c31a3d6d54b75dea51c44080113b2f40baf9944e3
+    bonya job get d40295e5e0c9b89a1359721c31a3d6d54b75dea51c44080113b2f40baf9944e3
     ```
 
     Nothing to clean up — the run's own sandbox already tore itself down. Pass `--keep` to `job run` if you want the sandbox to survive the run instead.

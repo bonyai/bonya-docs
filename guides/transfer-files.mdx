@@ -9,14 +9,14 @@ Every sandbox exposes a filesystem API under `/v1/sandbox/{sandbox_id}/fs`. Read
 
 <CodeGroup>
 ```shell cURL
-curl -s -X PUT "https://api.tyto.run/v1/sandbox/$SANDBOX_ID/fs/write?path=/workspace/hello.txt" \
+curl -s -X PUT "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/fs/write?path=/workspace/hello.txt" \
   -H "Authorization: Bearer $BONYA_API_KEY" \
   -H "Content-Type: application/octet-stream" \
   --data-binary @./hello.txt
 ```
 
 ```shell CLI
-tyto fs upload $SANDBOX_ID ./hello.txt /workspace/hello.txt
+bonya fs upload $SANDBOX_ID ./hello.txt /workspace/hello.txt
 ```
 
 ```ts TypeScript
@@ -38,13 +38,13 @@ sandbox.UploadFile(ctx, "./hello.txt", "/workspace/hello.txt")
 
 <CodeGroup>
 ```shell cURL
-curl -s "https://api.tyto.run/v1/sandbox/$SANDBOX_ID/fs/read?path=/workspace/hello.txt" \
+curl -s "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/fs/read?path=/workspace/hello.txt" \
   -H "Authorization: Bearer $BONYA_API_KEY" \
   -o ./hello.downloaded.txt
 ```
 
 ```shell CLI
-tyto fs download $SANDBOX_ID /workspace/hello.txt ./hello.downloaded.txt
+bonya fs download $SANDBOX_ID /workspace/hello.txt ./hello.downloaded.txt
 ```
 
 ```ts TypeScript
@@ -86,12 +86,12 @@ payload = sandbox.read_file("/workspace/message.txt")
 
 <CodeGroup>
 ```shell cURL
-curl -s "https://api.tyto.run/v1/sandbox/$SANDBOX_ID/fs/list?path=/workspace" \
+curl -s "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/fs/list?path=/workspace" \
   -H "Authorization: Bearer $BONYA_API_KEY"
 ```
 
 ```shell CLI
-tyto fs ls $SANDBOX_ID /workspace
+bonya fs ls $SANDBOX_ID /workspace
 ```
 
 ```ts TypeScript
@@ -109,12 +109,12 @@ The response is `{ "files": [ ...FsFileInfo ] }` — immediate children only, so
 
 <CodeGroup>
 ```shell cURL
-curl -s "https://api.tyto.run/v1/sandbox/$SANDBOX_ID/fs/stat?path=/workspace/hello.txt" \
+curl -s "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/fs/stat?path=/workspace/hello.txt" \
   -H "Authorization: Bearer $BONYA_API_KEY"
 ```
 
 ```shell CLI
-tyto fs stat $SANDBOX_ID /workspace/hello.txt
+bonya fs stat $SANDBOX_ID /workspace/hello.txt
 ```
 
 ```ts TypeScript
@@ -133,26 +133,26 @@ info = sandbox.stat_file("/workspace/hello.txt")
 <CodeGroup>
 ```shell cURL
 # mkdir
-curl -s -X POST "https://api.tyto.run/v1/sandbox/$SANDBOX_ID/fs/mkdir" \
+curl -s -X POST "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/fs/mkdir" \
   -H "Authorization: Bearer $BONYA_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"path": "/workspace/output"}'
 
 # rename
-curl -s -X POST "https://api.tyto.run/v1/sandbox/$SANDBOX_ID/fs/rename" \
+curl -s -X POST "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/fs/rename" \
   -H "Authorization: Bearer $BONYA_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"from": "/workspace/hello.txt", "to": "/workspace/output/hello.txt"}'
 
 # delete (recursive)
-curl -s -X DELETE "https://api.tyto.run/v1/sandbox/$SANDBOX_ID/fs?path=/workspace/output&recursive=true" \
+curl -s -X DELETE "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/fs?path=/workspace/output&recursive=true" \
   -H "Authorization: Bearer $BONYA_API_KEY"
 ```
 
 ```shell CLI
-tyto fs mkdir $SANDBOX_ID /workspace/output
-tyto fs mv $SANDBOX_ID /workspace/hello.txt /workspace/output/hello.txt
-tyto fs rm $SANDBOX_ID /workspace/output --recursive
+bonya fs mkdir $SANDBOX_ID /workspace/output
+bonya fs mv $SANDBOX_ID /workspace/hello.txt /workspace/output/hello.txt
+bonya fs rm $SANDBOX_ID /workspace/output --recursive
 ```
 
 ```ts TypeScript

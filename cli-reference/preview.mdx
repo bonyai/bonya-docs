@@ -3,7 +3,7 @@ title: preview
 description: Publish, list, and delete preview URLs for a port running inside a sandbox
 ---
 
-## `tyto preview`
+## `bonya preview`
 
 <Info>Alias: `pv`</Info>
 
@@ -14,7 +14,7 @@ A preview publishes one guest port at an HTTPS URL a browser can open. Ports mus
 Publishes a preview URL for a guest port.
 
 ```shell
-tyto preview create [sandbox] <port> [--auth token|public] [--name web]
+bonya preview create [sandbox] <port> [--auth token|public] [--name web]
 ```
 
 | Flag | Default | Description |
@@ -24,20 +24,20 @@ tyto preview create [sandbox] <port> [--auth token|public] [--name web]
 | `--by-name` | `false` | Treat the sandbox argument as a name even if it looks like an id. |
 
 <Warning>
-`--auth public` means anyone with the URL reaches the service running in your sandbox with **no credential at all**. The CLI marks public preview URLs in red in its output as a reminder. Use the default `token` mode unless you specifically need to share the URL with people who don't have a Tyto session.
+`--auth public` means anyone with the URL reaches the service running in your sandbox with **no credential at all**. The CLI marks public preview URLs in red in its output as a reminder. Use the default `token` mode unless you specifically need to share the URL with people who don't have a Bonya session.
 </Warning>
 
 <CodeGroup>
 ```shell Default (token-authenticated)
-tyto preview create web 3000
+bonya preview create web 3000
 ```
 
 ```shell Named
-tyto preview create web 3000 --name app
+bonya preview create web 3000 --name app
 ```
 
 ```shell Public — no credential required
-tyto preview create web 8080 --auth public
+bonya preview create web 8080 --auth public
 ```
 </CodeGroup>
 
@@ -46,11 +46,11 @@ tyto preview create web 8080 --auth public
 Lists previews for a sandbox.
 
 ```shell
-tyto preview list [sandbox]
+bonya preview list [sandbox]
 ```
 
 ```shell
-tyto preview list web
+bonya preview list web
 ```
 
 ## `delete`
@@ -58,9 +58,9 @@ tyto preview list web
 Deletes a preview.
 
 ```shell
-tyto preview delete [sandbox] <preview-id>
+bonya preview delete [sandbox] <preview-id>
 ```
 
 ```shell
-tyto preview delete web pv-a1b2c3
+bonya preview delete web pv-a1b2c3
 ```

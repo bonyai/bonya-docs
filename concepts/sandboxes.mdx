@@ -1,6 +1,6 @@
 ---
 title: Sandboxes
-description: The compute resource at the center of the Tyto API
+description: The compute resource at the center of the Bonya API
 ---
 
 A **sandbox** is the resource everything else in the API is scoped to — sessions, exec, files, and previews all operate on a sandbox identified by its `sandbox_id`.
@@ -34,7 +34,7 @@ Suspension is **automatic** — there is no endpoint to request it. The only lif
 
 <CodeGroup>
 ```shell cURL
-curl -s -X POST "https://api.tyto.run/v1/sandbox/$SANDBOX_ID/resume" \
+curl -s -X POST "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/resume" \
   -H "Authorization: Bearer $BONYA_API_KEY"
 ```
 
@@ -49,12 +49,12 @@ print(resume.sandbox_id, resume.lifecycle_operation_id, resume.already_running)
 ```
 
 ```go Go
-resume, err := sandbox.Resume(ctx, tyto.ResumeOptions{IdempotencyKey: "resume-job-123"})
+resume, err := sandbox.Resume(ctx, bonya.ResumeOptions{IdempotencyKey: "resume-job-123"})
 fmt.Println(resume.SandboxID, resume.LifecycleOperationID, resume.AlreadyRunning)
 ```
 </CodeGroup>
 
-There's no `tyto resume` CLI command — the CLI only resumes implicitly (for example, `tyto console` resumes a suspended sandbox before attaching). **MCP:** the `sandbox_resume` tool exposes this explicit resume.
+There's no `bonya resume` CLI command — the CLI only resumes implicitly (for example, `bonya console` resumes a suspended sandbox before attaching). **MCP:** `sandbox_keepalive` wakes a paused sandbox, and `sandbox_pause` pauses one.
 
 This synchronously resumes a suspended sandbox back to `RUNNING`. The response is a `SandboxResume` object with `sandbox_id` and `already_running`: if the sandbox was already running, the call is a no-op and `already_running` is `true`, but it still returns `200`.
 
@@ -66,34 +66,34 @@ There is no start, stop, wake, fork, or restore endpoint. Resume is the only exp
 
 <CodeGroup>
 ```shell cURL
-curl -s -X POST "https://api.tyto.run/v1/sandbox?wait=ready" \
+curl -s -X POST "https://api.bonya.ai/v1/sandbox?wait=ready" \
   -H "Authorization: Bearer $BONYA_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"template_id": "bonya-dev"}'
 ```
 
 ```shell CLI
-tyto create --template bonya-dev
+bonya create --template bonya-dev
 ```
 
 ```ts TypeScript
-import { Tyto } from "@bonya-ai/tyto";
+import { Bonya } from "@bonya-ai/bonya";
 
-const client = new Tyto();
+const client = new Bonya();
 const sandbox = await client.createSandbox({ template: "bonya-dev" });
 console.log(sandbox.id);
 ```
 
 ```python Python
-from tyto import Tyto
+from bonya import Bonya
 
-with Tyto() as client:
+with Bonya() as client:
     sandbox = client.create_sandbox(template="bonya-dev")
     print(sandbox.id)
 ```
 
 ```go Go
-client, err := tyto.NewClient()
+client, err := bonya.NewClient()
 if err != nil {
     log.Fatal(err)
 }
@@ -146,12 +146,12 @@ The response (`SandboxPage`) is `{ "sandboxes": [...], "next_page_token": "..." 
 
 <CodeGroup>
 ```shell cURL
-curl -s -X DELETE "https://api.tyto.run/v1/sandbox/$SANDBOX_ID" \
+curl -s -X DELETE "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID" \
   -H "Authorization: Bearer $BONYA_API_KEY"
 ```
 
 ```shell CLI
-tyto delete $SANDBOX_ID
+bonya delete $SANDBOX_ID
 ```
 
 ```ts TypeScript

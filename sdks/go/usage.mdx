@@ -41,8 +41,8 @@ hand; reach for a client-level call only when all you have is an id.
 ## Create sandboxes
 
 ```go
-sandbox, err := client.CreateSandbox(ctx, "bonya-dev", tyto.CreateOptions{
-	Wait:           tyto.WaitReady,
+sandbox, err := client.CreateSandbox(ctx, "bonya-dev", bonya.CreateOptions{
+	Wait:           bonya.WaitReady,
 	IdempotencyKey: "create-job-123",
 })
 ```
@@ -73,8 +73,8 @@ Sandbox fields: `sandbox.ID`, `.OperationID`, `.Template`, `.Version`,
 ```go
 sandbox, err := client.GetSandbox(ctx, "sbx_123")
 
-summaries, err := client.ListSandboxes(ctx, tyto.ListOptions{
-	States: []tyto.Status{tyto.StatusRunning, tyto.StatusSuspended},
+summaries, err := client.ListSandboxes(ctx, bonya.ListOptions{
+	States: []bonya.Status{bonya.StatusRunning, bonya.StatusSuspended},
 	Limit:  20,
 })
 for _, summary := range summaries {
@@ -110,7 +110,7 @@ has `ID`, `OperationID`, `Template`, `Version`, `LastObservedStatus`,
 Names are not unique: if more than one sandbox carries the name, it returns
 an error rather than picking one (a later `Delete` could otherwise destroy
 the wrong sandbox) — use `ListSandboxes` with `ListOptions{Name: ...}` and
-decide yourself, which is what the `tyto` CLI does when it prompts.
+decide yourself, which is what the `bonya` CLI does when it prompts.
 
 ## Delete and cleanup
 
@@ -134,7 +134,7 @@ defer sandbox.Delete(ctx)
 ## Resume
 
 ```go
-resume, err := sandbox.Resume(ctx, tyto.ResumeOptions{IdempotencyKey: "resume-job-123"})
+resume, err := sandbox.Resume(ctx, bonya.ResumeOptions{IdempotencyKey: "resume-job-123"})
 fmt.Println(resume.SandboxID, resume.LifecycleOperationID, resume.AlreadyRunning)
 ```
 
@@ -160,7 +160,7 @@ which keep running after you disconnect.
 ### Buffered exec
 
 ```go
-result, err := sandbox.Exec(ctx, []string{"python3", "-c", "import os; print(os.environ['MODE'])"}, tyto.ExecOptions{
+result, err := sandbox.Exec(ctx, []string{"python3", "-c", "import os; print(os.environ['MODE'])"}, bonya.ExecOptions{
 	Env:     map[string]string{"MODE": "development"},
 	Cwd:     "/workspace",
 	Timeout: 10 * time.Second,
@@ -202,8 +202,8 @@ non-ok result, `Exec` returns `*ExecFailedError`, with the original result
 at `error.Result`:
 
 ```go
-result, err := sandbox.Exec(ctx, []string{"false"}, tyto.ExecOptions{Check: true})
-var execErr *tyto.ExecFailedError
+result, err := sandbox.Exec(ctx, []string{"false"}, bonya.ExecOptions{Check: true})
+var execErr *bonya.ExecFailedError
 if errors.As(err, &execErr) {
 	fmt.Println(execErr.Result.ExitCode)
 }
@@ -230,11 +230,11 @@ for {
 		break // stream ended cleanly after Exit
 	}
 	switch e := event.(type) {
-	case tyto.Stdout:
+	case bonya.Stdout:
 		fmt.Print("stdout: ", string(e.Data))
-	case tyto.Stderr:
+	case bonya.Stderr:
 		fmt.Print("stderr: ", string(e.Data))
-	case tyto.Exit:
+	case bonya.Exit:
 		fmt.Println("exit:", e.ExitCode)
 	}
 }
@@ -253,8 +253,8 @@ Write stdin with `session.Write(data []byte)` — returns
 `session.CloseStdin()` is idempotent. `session.Cancel()` is idempotent and
 sends a cancel frame when possible. `session.Close()` cancels an
 unfinished session — call it via `defer`. Internally the SDK uses a
-background reader goroutine feeding a buffered event channel per gRPC
-stream, replacing Python's queue+thread+condvar approach. If `Next`
+background reader goroutine feeding a buffered event channel per WebSocket
+connection. If `Next`
 reaches the session deadline before the next event, the SDK cancels the
 remote exec and returns `*TimeoutError`.
 
@@ -282,7 +282,7 @@ managed sessions for long-lived terminals like dev servers you want to
 detach from and come back to.
 
 ```go
-info, err := sandbox.CreateSession(ctx, "server", []string{"bash"}, tyto.CreateSessionOptions{Cols: 120, Rows: 40})
+info, err := sandbox.CreateSession(ctx, "server", []string{"bash"}, bonya.CreateSessionOptions{Cols: 120, Rows: 40})
 
 stream, err := sandbox.AttachSession(ctx, "server")
 stream.Write([]byte("npm run dev\n"))
@@ -419,8 +419,8 @@ server must bind a port in 1024–65535; privileged ports are never
 previewable.
 
 ```go
-preview, err := sandbox.CreatePreview(ctx, 3000, tyto.CreatePreviewOptions{Name: "web"})
-fmt.Println(preview.URL) // https://pv-<26 chars>.preview.tyto.run
+preview, err := sandbox.CreatePreview(ctx, 3000, bonya.CreatePreviewOptions{Name: "web"})
+fmt.Println(preview.URL) // https://pv-<26 chars>.tv.bonya.ai
 
 previews, err := sandbox.ListPreviews(ctx)
 err = sandbox.DeletePreview(ctx, preview.ID)
@@ -433,7 +433,7 @@ host-scoped `HttpOnly` cookie, and redirects without the token in the URL.
 It errors on a public preview, which has no token to exchange.
 
 ```go
-public, err := sandbox.CreatePreview(ctx, 8080, tyto.CreatePreviewOptions{Auth: tyto.PreviewAuthPublic})
+public, err := sandbox.CreatePreview(ctx, 8080, bonya.CreatePreviewOptions{Auth: bonya.PreviewAuthPublic})
 ```
 
 `PreviewAuthPublic` means anyone with the URL reaches the service, no
@@ -451,13 +451,8 @@ after suspend pays resume latency and may return `503` with `Retry-After`.
 
 ## Snapshots
 
-<Note>
-Snapshots exist only through the SDKs (and the `tyto` CLI) over gRPC —
-there is no public REST endpoint for creating or deleting them.
-</Note>
-
 ```go
-snapshot, err := sandbox.Snapshot(ctx, tyto.SnapshotOptions{IdempotencyKey: "snapshot-job-123"})
+snapshot, err := sandbox.Snapshot(ctx, bonya.SnapshotOptions{IdempotencyKey: "snapshot-job-123"})
 fmt.Println(snapshot.ID, snapshot.SourceSandboxID)
 
 snapshot.Delete(ctx)
@@ -485,8 +480,8 @@ and, by default, deleted for you) or an existing one. Jobs are how you run
 work without holding a `*Sandbox` handle open yourself for the duration.
 
 ```go
-run, err := client.RunJob(ctx, tyto.JobSpec{
-	NewSandbox: &tyto.JobSandboxSpec{Template: "bonya-dev"},
+run, err := client.RunJob(ctx, bonya.JobSpec{
+	NewSandbox: &bonya.JobSandboxSpec{Template: "bonya-dev"},
 	Cmd:        []string{"./run-tests.sh"},
 })
 if err != nil {
@@ -500,7 +495,7 @@ timeout — use it for short jobs. `StartJob` returns immediately with a
 run id instead:
 
 ```go
-runID, alreadyRunning, err := client.StartJob(ctx, tyto.JobSpec{
+runID, alreadyRunning, err := client.StartJob(ctx, bonya.JobSpec{
 	ExistingSandboxID: "sbx-123",
 	Cmd:               []string{"./long-migration.sh"},
 })
@@ -510,8 +505,8 @@ fmt.Println(detail.Status, detail.Spec, detail.Timeline)
 ```
 
 `JobSpec` requires exactly one of `ExistingSandboxID`/`NewSandbox`, and
-exactly one of `Cmd`/`Script`. `Disposition` (`tyto.DispositionDelete`,
-the default, or `tyto.DispositionKeep`) controls what happens to a
+exactly one of `Cmd`/`Script`. `Disposition` (`bonya.DispositionDelete`,
+the default, or `bonya.DispositionKeep`) controls what happens to a
 sandbox the job itself created once the run ends; it's not meaningful for
 `ExistingSandboxID`.
 
@@ -522,7 +517,7 @@ endpoint to edit a run in place: to "edit and rerun" one, fetch it with
 or `StartJob` as a new run.
 
 ```go
-runs, err := client.ListJobRuns(ctx, tyto.ListJobRunsOptions{SandboxID: "sbx-123"})
+runs, err := client.ListJobRuns(ctx, bonya.ListJobRunsOptions{SandboxID: "sbx-123"})
 err = client.CancelJobRun(ctx, runID) // requests cancellation; cleanup still runs
 ```
 
@@ -536,9 +531,9 @@ future time — so it runs without you calling `RunJob` yourself.
 
 ```go
 schedule, err := client.CreateJobSchedule(ctx,
-	tyto.ScheduleSpec{IntervalSeconds: 3600},
-	tyto.JobSpec{
-		NewSandbox: &tyto.JobSandboxSpec{Template: "bonya-dev"},
+	bonya.ScheduleSpec{IntervalSeconds: 3600},
+	bonya.JobSpec{
+		NewSandbox: &bonya.JobSandboxSpec{Template: "bonya-dev"},
 		Cmd:        []string{"./nightly-report.sh"},
 	},
 )
@@ -547,7 +542,7 @@ fmt.Println(schedule.ScheduleID, schedule.NextRunAtUnixNanos)
 
 `ScheduleSpec` requires exactly one of `CronExpressions`, `IntervalSeconds`,
 and `RunAtUnixNanos` (a one-shot: a single future calendar time, refused
-if in the past). `Overlap` (default `tyto.ScheduleOverlapSkip`) controls
+if in the past). `Overlap` (default `bonya.ScheduleOverlapSkip`) controls
 what a fire does when the previous run from the same schedule is still
 going.
 
@@ -558,7 +553,7 @@ schedule, err = client.GetJobSchedule(ctx, scheduleID)
 // UpdateJobSchedule replaces the whole schedule -- pass every field you
 // want to keep, not just the one you're changing.
 schedule, err = client.UpdateJobSchedule(ctx, scheduleID,
-	tyto.ScheduleSpec{IntervalSeconds: 7200}, jobSpec)
+	bonya.ScheduleSpec{IntervalSeconds: 7200}, jobSpec)
 
 schedule, err = client.SetJobSchedulePaused(ctx, scheduleID, true, "pausing for maintenance")
 err = client.TriggerJobSchedule(ctx, scheduleID) // fires one run now, ignoring timing
@@ -611,7 +606,7 @@ against, including calls on a client that is already connected — it takes
 effect immediately, not just on the next dial. An empty id is rejected as
 an `*InvalidRequestError` rather than silently falling back to the
 personal organization. To set it once at construction instead, use
-`tyto.WithOrganizationID(id)`; `OrganizationID()` reads back whatever is
+`bonya.WithOrganizationID(id)`; `OrganizationID()` reads back whatever is
 currently in effect. See [Configuration](/sdks/go/installation#configure)
 for the full precedence and CI guidance.
 
@@ -622,7 +617,7 @@ All SDK errors embed `BaseError` and expose `Message()`, `SandboxID`,
 
 ```go
 sandbox, err := client.GetSandbox(ctx, "sbx_missing")
-var notFound *tyto.SandboxNotFoundError
+var notFound *bonya.SandboxNotFoundError
 if errors.As(err, &notFound) {
 	fmt.Println("sandbox does not exist or is not visible")
 }
@@ -661,8 +656,8 @@ details similarly.
 ### Retries and idempotency
 
 `WithMaxRetries` (default `2`) controls SDK retries for retryable
-control-plane operations. The SDK retries gRPC `UNAVAILABLE` for create,
-get, list, delete, resume, snapshot create, and snapshot delete, while
+control-plane operations. The SDK retries transient failures for create,
+get, list, delete, snapshot create, and snapshot delete, while
 preserving the same request and idempotency key where one exists. Exec
 calls are not retried, except for one capability refresh when the SDK can
 prove an exec capability token is expired before responses start.
@@ -681,7 +676,7 @@ Go has no context-manager protocol, so use `defer` for deterministic
 cleanup:
 
 ```go
-client, err := tyto.NewClient(tyto.WithAPIKey("BONYA_API_KEY"))
+client, err := bonya.NewClient(bonya.WithAPIKey("BONYA_API_KEY"))
 if err != nil {
 	log.Fatal(err)
 }

@@ -23,13 +23,13 @@ Returns `200` with the raw file contents as `application/octet-stream`.
 
 <CodeGroup>
 ```shell cURL
-curl -s "https://api.tyto.run/v1/sandbox/$SANDBOX_ID/fs/read?path=/workspace/hello.txt" \
+curl -s "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/fs/read?path=/workspace/hello.txt" \
   -H "Authorization: Bearer $BONYA_API_KEY" \
   -o ./hello.downloaded.txt
 ```
 
 ```shell CLI
-tyto fs read $SANDBOX_ID /workspace/hello.txt
+bonya fs read $SANDBOX_ID /workspace/hello.txt
 ```
 
 ```ts TypeScript
@@ -61,14 +61,14 @@ The request body is the raw file contents (`application/octet-stream`). Returns 
 
 <CodeGroup>
 ```shell cURL
-curl -s -X PUT "https://api.tyto.run/v1/sandbox/$SANDBOX_ID/fs/write?path=/workspace/hello.txt" \
+curl -s -X PUT "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/fs/write?path=/workspace/hello.txt" \
   -H "Authorization: Bearer $BONYA_API_KEY" \
   -H "Content-Type: application/octet-stream" \
   --data-binary @./hello.txt
 ```
 
 ```shell CLI
-tyto fs write $SANDBOX_ID /workspace/hello.txt ./hello.txt
+bonya fs write $SANDBOX_ID /workspace/hello.txt ./hello.txt
 ```
 
 ```ts TypeScript
@@ -92,8 +92,8 @@ There's no dedicated REST endpoint for upload/download — the CLI and SDKs impl
 
 <CodeGroup>
 ```shell CLI
-tyto fs upload $SANDBOX_ID ./hello.txt /workspace/hello.txt
-tyto fs download $SANDBOX_ID /workspace/hello.txt ./hello.downloaded.txt
+bonya fs upload $SANDBOX_ID ./hello.txt /workspace/hello.txt
+bonya fs download $SANDBOX_ID /workspace/hello.txt ./hello.downloaded.txt
 ```
 
 ```ts TypeScript
@@ -128,12 +128,12 @@ Returns `FsListResponse`: `{ "files": [ ...FsFileInfo ] }`.
 
 <CodeGroup>
 ```shell cURL
-curl -s "https://api.tyto.run/v1/sandbox/$SANDBOX_ID/fs/list?path=/workspace" \
+curl -s "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/fs/list?path=/workspace" \
   -H "Authorization: Bearer $BONYA_API_KEY"
 ```
 
 ```shell CLI
-tyto fs ls $SANDBOX_ID /workspace
+bonya fs ls $SANDBOX_ID /workspace
 ```
 
 ```ts TypeScript
@@ -165,12 +165,12 @@ Returns `FsStatResponse`: `{ "file": { ...FsFileInfo } }`.
 
 <CodeGroup>
 ```shell cURL
-curl -s "https://api.tyto.run/v1/sandbox/$SANDBOX_ID/fs/stat?path=/workspace/hello.txt" \
+curl -s "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/fs/stat?path=/workspace/hello.txt" \
   -H "Authorization: Bearer $BONYA_API_KEY"
 ```
 
 ```shell CLI
-tyto fs stat $SANDBOX_ID /workspace/hello.txt
+bonya fs stat $SANDBOX_ID /workspace/hello.txt
 ```
 
 ```ts TypeScript
@@ -228,14 +228,14 @@ Returns `201` on success.
 
 <CodeGroup>
 ```shell cURL
-curl -s -X POST "https://api.tyto.run/v1/sandbox/$SANDBOX_ID/fs/mkdir" \
+curl -s -X POST "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/fs/mkdir" \
   -H "Authorization: Bearer $BONYA_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"path": "/workspace/output"}'
 ```
 
 ```shell CLI
-tyto fs mkdir $SANDBOX_ID /workspace/output
+bonya fs mkdir $SANDBOX_ID /workspace/output
 ```
 
 ```ts TypeScript
@@ -272,14 +272,14 @@ Returns `200` on success.
 
 <CodeGroup>
 ```shell cURL
-curl -s -X POST "https://api.tyto.run/v1/sandbox/$SANDBOX_ID/fs/rename" \
+curl -s -X POST "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/fs/rename" \
   -H "Authorization: Bearer $BONYA_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"from": "/workspace/hello.txt", "to": "/workspace/output/hello.txt"}'
 ```
 
 ```shell CLI
-tyto fs mv $SANDBOX_ID /workspace/hello.txt /workspace/output/hello.txt
+bonya fs mv $SANDBOX_ID /workspace/hello.txt /workspace/output/hello.txt
 ```
 
 ```ts TypeScript
@@ -314,12 +314,12 @@ Returns `204` on success.
 
 <CodeGroup>
 ```shell cURL
-curl -s -X DELETE "https://api.tyto.run/v1/sandbox/$SANDBOX_ID/fs?path=/workspace/output&recursive=true" \
+curl -s -X DELETE "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/fs?path=/workspace/output&recursive=true" \
   -H "Authorization: Bearer $BONYA_API_KEY"
 ```
 
 ```shell CLI
-tyto fs rm $SANDBOX_ID /workspace/output --recursive
+bonya fs rm $SANDBOX_ID /workspace/output --recursive
 ```
 
 ```ts TypeScript

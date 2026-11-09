@@ -15,52 +15,52 @@ Every setting resolves in the same order, checked in this sequence, first non-em
     `BONYA_API_KEY`, `BONYA_ENDPOINT`, `BONYA_ORGANIZATION_ID`, or `BONYA_CA_BUNDLE`.
   </Step>
   <Step title="Saved login">
-    Whatever `tyto login` last wrote to the config file. `--ca-bundle` has no saved-login fallback — only flag and environment variable apply to it.
+    Whatever `bonya login` last wrote to the config file. `--ca-bundle` has no saved-login fallback — only flag and environment variable apply to it.
   </Step>
 </Steps>
 
 If none of the three supply an API key, the command fails immediately with:
 
 ```text
-api key is required: pass --api-key, set BONYA_API_KEY, or run `tyto login`
+api key is required: pass --api-key, set BONYA_API_KEY, or run `bonya login`
 ```
 
-`--endpoint` and `--organization-id` are optional at every level — an unset endpoint falls back to `https://api.tyto.run`, and an unset organization ID resolves to your personal organization.
+`--endpoint` and `--organization-id` are optional at every level — an unset endpoint falls back to `https://api.bonya.ai`, and an unset organization ID resolves to your personal organization.
 
-Run `tyto whoami` at any time to see exactly which source (`--flag`, `environment variable`, `tyto login (saved)`, or `(not set)`) each setting is currently resolving from.
+Run `bonya whoami` at any time to see exactly which source (`--flag`, `environment variable`, `bonya login (saved)`, or `(not set)`) each setting is currently resolving from.
 
 ## Config file
 
-`tyto login` writes the resolved API key (and, if given, the endpoint and organization id) to a JSON file:
+`bonya login` writes the resolved API key (and, if given, the endpoint and organization id) to a JSON file:
 
-- `$XDG_CONFIG_HOME/tyto/config.json`, if `XDG_CONFIG_HOME` is set
-- otherwise `<user config dir>/tyto/config.json` (Go's `os.UserConfigDir()` — `~/Library/Application Support/tyto/config.json` on macOS, `~/.config/tyto/config.json` on Linux)
+- `$XDG_CONFIG_HOME/bonya/config.json`, if `XDG_CONFIG_HOME` is set
+- otherwise `<user config dir>/bonya/config.json` (Go's `os.UserConfigDir()` — `~/Library/Application Support/bonya/config.json` on macOS, `~/.config/bonya/config.json` on Linux)
 
 ```json
 {
   "api_key": "byk_...",
-  "endpoint": "https://api.tyto.run",
+  "endpoint": "https://api.bonya.ai",
   "organization_id": "org-..."
 }
 ```
 
-`endpoint` and `organization_id` are omitted from the file entirely when not set. The file is written with `0600` permissions, and its parent directory with `0700`, since it holds a live API key. `tyto logout` deletes the file; deleting an already-absent file is not an error.
+`endpoint` and `organization_id` are omitted from the file entirely when not set. The file is written with `0600` permissions, and its parent directory with `0700`, since it holds a live API key. `bonya logout` deletes the file; deleting an already-absent file is not an error.
 
-`tyto org use` updates just the `organization_id` field in this same file, without touching the API key or endpoint.
+`bonya org use` updates just the `organization_id` field in this same file, without touching the API key or endpoint.
 
 ## `--json`
 
 Pass `--json` on any command to get machine-readable output instead of tables and key/value text:
 
 ```shell
-tyto list --json | jq -r '.[] | select(.last_observed_status=="running") | .id'
+bonya list --json | jq -r '.[] | select(.last_observed_status=="running") | .id'
 ```
 
 JSON output is never colored and never decorated with hints — it's meant purely for a parser. Passing `--json` also disables all interactive prompting (see below), the same as `--no-input`.
 
 ## Non-interactive behavior
 
-`tyto` prompts — with pickers, confirmations, and spinners — only when it's safe to. Prompting is disabled the instant **any** of these five conditions hold:
+`bonya` prompts — with pickers, confirmations, and spinners — only when it's safe to. Prompting is disabled the instant **any** of these five conditions hold:
 
 1. `--no-input` is passed
 2. `--json` is passed
@@ -73,14 +73,14 @@ Both stdin and stdout are checked because the picker UI draws on stdout and read
 Instead of hanging waiting for a keystroke nobody will send, a command fails immediately with a message naming what was missing:
 
 ```console
-$ tyto console < /dev/null
+$ bonya console < /dev/null
 no sandbox given and this is not an interactive terminal; pass a sandbox name or id
 ```
 
 Ambiguity is reported the same way, with enough detail to resolve it without a picker:
 
 ```console
-$ tyto get web --no-input
+$ bonya get web --no-input
 3 sandboxes are named "web"; pass an id instead:
   sbx-4f1c9a2b3c4d5e6f7a8b9c0d1e2f3a4b  running    bonya-dev
   sbx-9a02aabbccddeeff00112233445566aa  suspended  bonya-dev
@@ -93,4 +93,4 @@ $ tyto get web --no-input
 
 ## Color
 
-`--no-color` disables ANSI color codes; the `NO_COLOR` environment variable does the same. Color is also automatically suppressed whenever output isn't a terminal, so piping `tyto list` to a file or another program never leaks escape codes into it.
+`--no-color` disables ANSI color codes; the `NO_COLOR` environment variable does the same. Color is also automatically suppressed whenever output isn't a terminal, so piping `bonya list` to a file or another program never leaks escape codes into it.

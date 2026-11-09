@@ -25,7 +25,7 @@ If you don't send `Idempotency-Key` yourself, retrying a create request (for exa
 Generate a unique key (a UUID works well) per logical create attempt, and send the same key again on retries of that same attempt:
 
 ```shell
-curl -s -X POST https://api.tyto.run/v1/sandbox \
+curl -s -X POST https://api.bonya.ai/v1/sandbox \
   -H "Authorization: Bearer $BONYA_API_KEY" \
   -H "Idempotency-Key: $(uuidgen)" \
   -H "Content-Type: application/json" \
