@@ -1,0 +1,76 @@
+---
+title: schedule
+description: Run jobs on a cron, interval, or one-shot schedule
+---
+
+## `bonya schedule`
+
+<Info>Aliases: `schedules`, `cron`</Info>
+
+A schedule wraps a job in a timer. See [Jobs](/concepts/jobs).
+
+## `create`
+
+<Info>Aliases: `new`, `c`</Info>
+
+```shell
+bonya schedule create [sandbox] [flags] -- cmd [args...]
+```
+
+Takes the same job flags as [`bonya job run`](/cli-reference/job), plus exactly one of `--cron`, `--every` or `--at`.
+
+```shell
+bonya schedule create --cron "0 3 * * *" --time-zone Europe/Cairo --new -- ./backup.sh
+bonya schedule create --every 15m web -- make healthcheck
+bonya schedule create --at 2026-12-01T09:00:00Z --new --script ./launch.sh
+```
+
+| Flag | Description |
+| --- | --- |
+| `--cron` | Cron expression (repeatable). |
+| `--every` | Fixed interval, e.g. `15m`. |
+| `--at` | One-shot time in RFC 3339 form. |
+| `--time-zone` | IANA time zone for `--cron` (default UTC). |
+| `--jitter` | Random delay added to each fire. |
+| `--overlap` | What to do when the previous run is still going: `skip` (default), `buffer_one` or `allow_all`. |
+| `--paused` | Create the schedule paused. |
+| `--idempotency-key` | Idempotency key for the create request. |
+
+```console
+$ bonya schedule create --new --every 1h -- echo hi
+SCHEDULE  sch-k1247dctbolmk5
+TIMING    every 1h0m0s
+STATE     active
+NEXT RUN  2026-11-10 01:00
+FIRES     0
+OVERLAP   skip
+```
+
+## `list`, `get`
+
+```console
+$ bonya schedule list
+SCHEDULE            TIMING        STATE   NEXT RUN
+sch-k1247dctbolmk5  every 1h0m0s  active  2026-11-10 01:00
+```
+
+## `pause`, `resume`
+
+```shell
+bonya schedule pause <schedule-id> [--note "maintenance"]
+bonya schedule resume <schedule-id>
+```
+
+## `trigger`
+
+Fires one run now, regardless of the schedule's timing. List its runs with `bonya job list --schedule <schedule-id>`.
+
+## `delete`
+
+<Info>Aliases: `rm`, `del`</Info>
+
+```shell
+bonya schedule delete <schedule-id> [--force]
+```
+
+Runs the schedule already started continue.

@@ -19,18 +19,18 @@ A job is not a replacement for [exec](/concepts/exec) or [managed sessions](/con
 curl -s -X POST "https://api.bonya.ai/v1/job" \
   -H "Authorization: Bearer $BONYA_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"new_sandbox": {"template_id": "bonya-dev"}, "cmd": ["./run-tests.sh"], "wait": true}'
+  -d '{"new_sandbox": {}, "command": ["./run-tests.sh"], "wait": true}'
 
 # start durably and check later (wait defaults to false)
 curl -s -X POST "https://api.bonya.ai/v1/job" \
   -H "Authorization: Bearer $BONYA_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"existing_sandbox_id": "'"$SANDBOX_ID"'", "cmd": ["./long-migration.sh"]}'
+  -d '{"existing_sandbox_id": "'"$SANDBOX_ID"'", "command": ["./long-migration.sh"]}'
 ```
 
 ```ts TypeScript
 const run = await client.runJob({
-  newSandbox: { template: "bonya-dev" },
+  newSandbox: {},
   cmd: ["./run-tests.sh"],
 });
 console.log(run.status, run.result?.exitCode);
@@ -45,7 +45,7 @@ const { runId } = await client.startJob({
 from bonya import JobSandboxSpec, JobSpec
 
 run = client.run_job(JobSpec(
-    new_sandbox=JobSandboxSpec(template="bonya-dev"),
+    new_sandbox=JobSandboxSpec(),
     cmd=("./run-tests.sh",),
 ))
 print(run.status, run.result.exit_code)
@@ -58,33 +58,33 @@ run_id, already_running = client.start_job(JobSpec(
 
 ```go Go
 run, err := client.RunJob(ctx, bonya.JobSpec{
-    NewSandbox: &bonya.JobSandboxSpec{Template: "bonya-dev"},
+    NewSandbox: &bonya.JobNewSandbox{},
     Cmd:        []string{"./run-tests.sh"},
 })
 fmt.Println(run.Status, run.Result.ExitCode)
 
-runID, alreadyRunning, err := client.StartJob(ctx, bonya.JobSpec{
+start, err := client.StartJob(ctx, bonya.JobSpec{
     ExistingSandboxID: sandboxID,
     Cmd:               []string{"./long-migration.sh"},
 })
 ```
 </CodeGroup>
 
-There's no `bonya job` CLI command — jobs are reached through REST or an SDK. **MCP:** `job_create` covers both modes — pass `wait: true` to block for the result or leave it `false` to get a `run_id` back immediately.
+**CLI:** [`bonya job run`](/cli-reference/job). **MCP:** `job_create` covers both modes — pass `wait: true` to block for the result or leave it `false` to get a `run_id` back immediately.
 
-The request body (`JobRequest`) requires **exactly one** of `existing_sandbox_id`/`new_sandbox`, and **exactly one** of `cmd`/`script`:
+The request body requires **exactly one** of `existing_sandbox_id`/`new_sandbox`, and **exactly one** of `command`/`script`:
 
 <ParamField body="existing_sandbox_id" type="string">
   Run on a sandbox that already exists. Mutually exclusive with `new_sandbox`.
 </ParamField>
 <ParamField body="new_sandbox" type="object">
-  Create a sandbox for this run. `{ template_id?, version?, name? }` — `template_id` may be omitted to use the deployment's configured default template, the same as [sandbox create](/concepts/sandboxes#creating-a-sandbox).
+  Create a sandbox for this run. `{ template_id?, template_revision?, snapshot?, image?, name?, network?, env?, secret_sets? }` — all optional; an empty object uses the default image, the same as [sandbox create](/concepts/sandboxes#creating-a-sandbox).
 </ParamField>
-<ParamField body="cmd" type="string[]">
+<ParamField body="command" type="string[]">
   Argv to run. Mutually exclusive with `script`.
 </ParamField>
 <ParamField body="script" type="object">
-  `{ body_b64, interpreter?, args?, filename? }` — a script the caller wrote or uploaded, run instead of `cmd`. The body travels inline and is size-capped.
+  `{ body, interpreter?, args?, filename? }` — script text, run instead of `command`. The body travels inline and is size-capped.
 </ParamField>
 <ParamField body="pre_run_script" type="object">
   Optional script (same shape as `script`) executed after the sandbox is ready and before the job's own command or script. A non-zero exit stops the job before it runs.
@@ -92,14 +92,23 @@ The request body (`JobRequest`) requires **exactly one** of `existing_sandbox_id
 <ParamField body="env" type="object">
   Extra environment variables for the job.
 </ParamField>
-<ParamField body="path" type="string">
+<ParamField body="working_dir" type="string">
   Working directory for the job.
+</ParamField>
+<ParamField body="secret_sets" type="string[]">
+  Secret set **names** injected into the run.
+</ParamField>
+<ParamField body="command_timeout_seconds" type="integer">
+  Stop the command after this long.
+</ParamField>
+<ParamField body="run_deadline_seconds" type="integer">
+  Stop the whole run after this long.
 </ParamField>
 <ParamField body="disposition" type="string" default="delete">
   `delete` or `keep` — what happens to a sandbox **this run created** once the run ends, however it ends (including cancellation). Not meaningful for `existing_sandbox_id`.
 </ParamField>
-<ParamField body="resume_if_suspended" type="boolean" default="false">
-  Applies to `existing_sandbox_id` only. `false` makes a suspended target a failure rather than an implicit resume, since resuming is a billable action the caller may not have intended.
+<ParamField body="wake_if_paused" type="boolean" default="false">
+  Applies to `existing_sandbox_id` only. `false` makes a paused target a failure rather than an implicit wake, since waking is a billable action the caller may not have intended.
 </ParamField>
 <ParamField body="wait" type="boolean" default="false">
   `false` starts the run durably and returns immediately with a `run_id` (`202`). `true` blocks for the result, bounded by the caller's own request timeout (`200`).
@@ -146,14 +155,14 @@ print(detail.status, detail.spec, detail.timeline)
 ```
 
 ```go Go
-runs, err := client.ListJobRuns(ctx, bonya.ListJobRunsOptions{SandboxID: sandboxID})
+page, err := client.ListJobRuns(ctx, bonya.ListJobRunsOptions{SandboxID: sandboxID})
 
 detail, err := client.GetJobRun(ctx, runID)
-fmt.Println(detail.Status, detail.Spec, detail.Timeline)
+fmt.Println(detail.Status, detail.Job, detail.Timeline)
 ```
 </CodeGroup>
 
-There's no `bonya job` CLI command. **MCP:** `job_list` pages through runs; `job_get` returns one run's full detail.
+**CLI:** [`bonya job list`](/cli-reference/job) and `bonya job get`. **MCP:** `job_list` pages through runs; `job_get` returns one run's full detail.
 
 ## Canceling a run
 
@@ -178,7 +187,7 @@ err = client.CancelJobRun(ctx, runID) // requests cancellation; cleanup still ru
 ```
 </CodeGroup>
 
-There's no `bonya job` CLI command. **MCP:** `job_cancel` requests cancellation the same way.
+**CLI:** `bonya job cancel`. **MCP:** `job_cancel` requests cancellation the same way.
 
 ## Job schedules
 
@@ -189,13 +198,13 @@ A **job schedule** wraps a job spec with timing, so it runs on its own without a
 curl -s -X POST "https://api.bonya.ai/v1/job-schedule" \
   -H "Authorization: Bearer $BONYA_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"interval_s": 3600, "job": {"new_sandbox": {"template_id": "bonya-dev"}, "cmd": ["./nightly-report.sh"]}}'
+  -d '{"schedule": {"interval_seconds": 3600}, "job": {"new_sandbox": {}, "command": ["./nightly-report.sh"]}}'
 ```
 
 ```ts TypeScript
 const schedule = await client.createJobSchedule(
   { intervalSeconds: 3600 },
-  { newSandbox: { template: "bonya-dev" }, cmd: ["./nightly-report.sh"] },
+  { newSandbox: {}, cmd: ["./nightly-report.sh"] },
 );
 console.log(schedule.scheduleId, schedule.nextRunAtUnixNanos);
 ```
@@ -205,26 +214,26 @@ from bonya import JobSandboxSpec, JobSpec, ScheduleSpec
 
 schedule = client.create_job_schedule(
     ScheduleSpec(interval_seconds=3600),
-    JobSpec(new_sandbox=JobSandboxSpec(template="bonya-dev"), cmd=("./nightly-report.sh",)),
+    JobSpec(new_sandbox=JobSandboxSpec(), cmd=("./nightly-report.sh",)),
 )
 print(schedule.schedule_id, schedule.next_run_at_unix_nanos)
 ```
 
 ```go Go
-schedule, err := client.CreateJobSchedule(ctx,
-    bonya.ScheduleSpec{IntervalSeconds: 3600},
-    bonya.JobSpec{NewSandbox: &bonya.JobSandboxSpec{Template: "bonya-dev"}, Cmd: []string{"./nightly-report.sh"}},
-)
-fmt.Println(schedule.ScheduleID, schedule.NextRunAtUnixNanos)
+schedule, err := client.CreateJobSchedule(ctx, bonya.JobScheduleSpec{
+    IntervalSeconds: 3600,
+    Job:             bonya.JobSpec{NewSandbox: &bonya.JobNewSandbox{}, Cmd: []string{"./nightly-report.sh"}},
+})
+fmt.Println(schedule.ID, schedule.NextRunAtNanos)
 ```
 </CodeGroup>
 
-There's no `bonya job-schedule` CLI command. **MCP:** `job_schedule_create` covers this.
+**CLI:** [`bonya schedule create`](/cli-reference/schedule). **MCP:** `job_schedule_create` covers this.
 
 <ParamField body="cron_expressions" type="string[]">
-  Cron expressions to fire on. Exactly one of `cron_expressions`/`interval_s`/`run_at_unix_nanos` is required.
+  Cron expressions to fire on. Exactly one of `cron_expressions`/`interval_seconds`/`run_at_unix_nanos` is required.
 </ParamField>
-<ParamField body="interval_s" type="integer">
+<ParamField body="interval_seconds" type="integer">
   Fire every N seconds.
 </ParamField>
 <ParamField body="run_at_unix_nanos" type="integer">
@@ -233,7 +242,7 @@ There's no `bonya job-schedule` CLI command. **MCP:** `job_schedule_create` cove
 <ParamField body="time_zone" type="string">
   IANA zone (e.g. `US/Pacific`) that `cron_expressions` is evaluated against. Empty is UTC.
 </ParamField>
-<ParamField body="jitter_s" type="integer">
+<ParamField body="jitter_seconds" type="integer">
   Random delay added to each fire, in seconds.
 </ParamField>
 <ParamField body="overlap" type="string" default="skip">
@@ -241,6 +250,9 @@ There's no `bonya job-schedule` CLI command. **MCP:** `job_schedule_create` cove
 </ParamField>
 <ParamField body="paused" type="boolean" default="false">
   Create the schedule already paused.
+</ParamField>
+<ParamField body="schedule" type="object" required>
+  The timing object holding the fields above.
 </ParamField>
 <ParamField body="job" type="object" required>
   The job spec to run on each fire — same shape and same-field requirements as job create, above.
@@ -290,13 +302,13 @@ client.delete_job_schedule(schedule_id)
 ```
 
 ```go Go
-schedules, err := client.ListJobSchedules(ctx)
+page, err := client.ListJobSchedules(ctx, 0, "")
 schedule, err = client.GetJobSchedule(ctx, scheduleID)
 
 // UpdateJobSchedule replaces the whole schedule -- pass every field you
 // want to keep, not just the one you're changing.
 schedule, err = client.UpdateJobSchedule(ctx, scheduleID,
-    bonya.ScheduleSpec{IntervalSeconds: 7200}, jobSpec)
+    bonya.JobScheduleSpec{IntervalSeconds: 7200, Job: jobSpec})
 
 schedule, err = client.SetJobSchedulePaused(ctx, scheduleID, true, "pausing for maintenance")
 err = client.TriggerJobSchedule(ctx, scheduleID) // fires one run now, ignoring timing
@@ -304,7 +316,7 @@ err = client.DeleteJobSchedule(ctx, scheduleID)
 ```
 </CodeGroup>
 
-There's no `bonya job-schedule` CLI command. **MCP:** `job_schedule_list` and `job_schedule_trigger` cover the calls above (plus `job_schedule_get`, `_update`, `_pause`, and `_delete` for the rest of the surface).
+**CLI:** `bonya schedule list|get|pause|resume|trigger|delete`. **MCP:** `job_schedule_list` and `job_schedule_trigger` cover the calls above (plus `job_schedule_get`, `_update`, `_pause`, and `_delete` for the rest of the surface).
 
 ## Related
 

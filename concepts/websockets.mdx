@@ -3,34 +3,65 @@ title: WebSockets
 description: How streaming exec and session attach work over WebSocket
 ---
 
-Two endpoints are WebSocket connections rather than plain HTTP request/response. Both are exposed as an HTTP `GET` that upgrades to a WebSocket:
+Two endpoints are WebSocket connections rather than plain HTTP request/response. Both are an HTTP `GET` that upgrades to a WebSocket:
 
 | Endpoint | Purpose |
 | --- | --- |
-| `GET /v1/sandbox/{sandbox_id}/exec` | Transient TTY exec — a one-off interactive command. |
+| `GET /v1/sandbox/{sandbox_id}/exec` | Streaming exec: a one-off command with live output, optionally in a TTY. |
 | `GET /v1/sandbox/{sandbox_id}/sessions/{session_name}/attach` | Attach to an existing, named session. |
 
-A successful connection returns HTTP **`101 Switching Protocols`**, same as any WebSocket upgrade. Anything that would otherwise be a `Problem` error (auth failure, missing sandbox, and so on) is returned as an ordinary `application/problem+json` response instead of a `101`.
+The SDKs and the CLI speak this protocol for you. This page is for when you build a client yourself.
 
-## Options travel in the START frame, never the query string
+A successful upgrade returns HTTP **`101 Switching Protocols`**. Anything that would otherwise be an error (auth failure, missing sandbox) comes back as an ordinary `application/problem+json` response instead of a `101`.
 
-Neither endpoint takes connection options — TTY size, the command to run, environment variables — as query parameters. The upgrade request itself carries only path parameters (`sandbox_id`, `session_name`) and the standard `X-Bonya-Organization-ID` header. Once the connection is upgraded, the client sends a **START frame** as the first message on the socket, and that frame carries the actual options:
+## Connecting
 
-- On `.../exec`, the START frame is a `TTYStartRequest`.
-- On `.../sessions/{session_name}/attach`, the START frame is an `AttachStartRequest`.
+- Request the **`bonya.v1`** WebSocket subprotocol.
+- Authenticate with `Authorization: Bearer byk_...` (or a sandbox capability token), plus the optional `X-Bonya-Organization-ID` header.
+- Send an `Idempotency-Key` header on exec so you can reattach to the same run if the connection drops.
+- Options (command, environment, terminal size) travel in the first **START** frame, never in the query string.
 
-<Warning>
-Don't put command, environment, or size options in the query string of the upgrade request. The API's design puts all of that in the START frame instead — a query string on these endpoints has nothing to bind to.
-</Warning>
+## Frames
+
+Every message is a **binary** frame: one type byte followed by the payload. A payload is at most 64 KiB.
+
+| Type | Byte | Direction | Payload |
+| --- | --- | --- | --- |
+| START | `0x01` | client → server | JSON options. Must be the first frame. |
+| STDIN | `0x02` | client → server | Raw bytes. |
+| RESIZE | `0x03` | client → server | JSON `{cols, rows}`. |
+| SIGNAL | `0x04` | client → server | Signal name. |
+| DETACH | `0x05` | client → server | Leave a session running and disconnect. |
+| STDIN_EOF | `0x06` | client → server | Close the process's stdin. |
+| CANCEL | `0x07` | client → server | Stop the command. |
+| ACCEPTED | `0x11` | server → client | The START was admitted. |
+| OUTPUT | `0x12` | server → client | Raw output bytes (a TTY merges stderr into it). |
+| EXIT | `0x13` | server → client | JSON exit status. |
+| ENDED | `0x14` | server → client | The session ended. |
+| OUTPUT_DROPPED | `0x15` | server → client | You read too slowly and output was dropped. |
+| ERROR | `0x16` | server → client | JSON error. |
+| STDERR | `0x17` | server → client | Raw stderr bytes (non-TTY only). |
 
 ## A `101` is not authorization
 
-Getting a `101 Switching Protocols` response means the WebSocket handshake succeeded — it does not by itself mean your request has been authorized. Per the contract, **admission happens at START**: the server evaluates auth and access when it receives your START frame, after the upgrade has already completed. Don't treat a successful upgrade as confirmation that the call will proceed — wait for the server's response to your START frame before assuming the exec or attach is actually admitted.
+A `101` means the handshake succeeded, not that your request is admitted. The server decides at START: wait for **ACCEPTED** (or an **ERROR**) before assuming the exec or attach is running.
 
-## Auth on the upgrade
+## Close codes
 
-The upgrade request itself is authenticated the same way as any other sandbox-scoped call: a `personalApiKey` bearer token (or `supabaseJwt`), plus the optional `X-Bonya-Organization-ID` header for org context. That authenticates *the connection*; the admission decision for the specific exec or session-attach action happens afterward, at the START frame, as described above.
+| Code | Meaning |
+| --- | --- |
+| `1000` | Normal close. |
+| `1001` | The server is shutting down. Reconnect. |
+| `1012` | The sandbox paused. Wake it, then reconnect. |
+| `4400` | Bad request. |
+| `4401` | Not authenticated. |
+| `4404` | Not found. |
+| `4408` | Timed out. |
+| `4409` | Conflict, for example another client took over the session. |
+| `4413` | Payload too large. |
+| `4429` | Rate limited. |
+| `4503` | Unavailable. |
 
 ## Related
 
-See [Exec](/concepts/exec) for the buffered, non-WebSocket alternative (`POST /v1/sandbox/{sandbox_id}/exec`, JSON in and out, no upgrade involved), and [Sessions](/concepts/sessions) for how named sessions are created and killed.
+See [Exec](/concepts/exec) for the buffered, non-WebSocket alternative, and [Sessions](/concepts/sessions) for how named sessions are created and killed.

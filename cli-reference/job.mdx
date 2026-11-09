@@ -1,0 +1,88 @@
+---
+title: job
+description: Run and track managed jobs
+---
+
+## `bonya job`
+
+A job is a managed run of a command or script, on an existing sandbox or a fresh one that is deleted afterwards. See [Jobs](/concepts/jobs).
+
+## `run`
+
+<Info>Aliases: `start`, `new`</Info>
+
+```shell
+bonya job run [sandbox] [flags] -- cmd [args...]
+```
+
+Starts a job and prints its run id. With `--wait` it blocks for the result, prints the command's output, and exits with its exit code.
+
+```shell
+bonya job run web -- make test
+bonya job run --new --wait -- echo hello
+bonya job run --new --script ./nightly.sh --keep
+```
+
+| Flag | Description |
+| --- | --- |
+| `--new` | Run on a new sandbox instead of an existing one. It is deleted afterwards unless `--keep`. |
+| `--sandbox-name` | Name for the new sandbox. |
+| `--template`, `--template-version` | Template for the new sandbox. Omit for the default. |
+| `--name` | Name for the job. |
+| `--script` | Run this local script file instead of a command. |
+| `--interpreter` | Interpreter for `--script` (default `sh`). |
+| `--env KEY=VALUE` | Environment variable (repeatable). |
+| `--cwd` | Remote working directory. |
+| `--timeout` | Stop the command after this long. |
+| `--deadline` | Stop the whole run after this long. |
+| `--keep` | Keep a sandbox the job created instead of deleting it. |
+| `--resume` | Wake a paused existing sandbox (billable) instead of failing. |
+| `--wait` | Wait for the job and exit with its exit code. |
+| `--idempotency-key` | Idempotency key for the start request. |
+
+```console
+$ bonya job run --new --wait -- echo job-hi
+job-hi
+```
+
+## `list`
+
+<Info>Aliases: `ls`, `l`</Info>
+
+```console
+$ bonya job list --limit 2
+RUN                 NAME  STATUS     SANDBOX            STARTED
+run-tg9w89ejcwyrym        completed  sb-83gvblcuzh445j  2026-11-10 00:58
+```
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--sandbox` | — | Only runs on this sandbox id. |
+| `--schedule` | — | Only runs fired by this schedule id. |
+| `--limit` | `20` | How many runs to show. |
+
+## `get`
+
+<Info>Aliases: `show`, `info`</Info>
+
+```console
+$ bonya job get run-tg9w89ejcwyrym
+RUN        run-tg9w89ejcwyrym
+NAME
+STATUS     completed
+SANDBOX    sb-83gvblcuzh445j
+STARTED    2026-11-10 00:58
+FINISHED   2026-11-10 00:58
+EXIT CODE  0
+
+stdout
+job-hi
+```
+
+## `cancel`
+
+```shell
+bonya job cancel <run-id>
+```
+
+Asks a running job to stop. The run's own cleanup, such as deleting a sandbox it created, still runs.

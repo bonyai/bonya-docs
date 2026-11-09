@@ -43,7 +43,6 @@ import { Bonya, Wait } from "@bonya-ai/bonya";
 
 const client = new Bonya();
 const sandbox = await client.createSandbox({
-  template: "bonya-dev",
   wait: Wait.READY,
   idempotencyKey: "create-job-123",
 });
@@ -87,7 +86,7 @@ await sandbox.refresh(); // update the handle's fields
 
 ```ts
 const result = await sandbox.exec(["bash", "-lc", "uname -a"], {
-  cwd: "/workspace",
+  cwd: "/root",
   timeout: 30,
   check: true, // throw ExecFailedError on a non-zero exit
 });
@@ -136,19 +135,19 @@ detach and replays what it produced while nobody was attached.
 ## Files
 
 ```ts
-await sandbox.writeFile("/workspace/hello.txt", "hello\n");
-const data = await sandbox.readFile("/workspace/hello.txt"); // Uint8Array
+await sandbox.writeFile("/root/hello.txt", "hello\n");
+const data = await sandbox.readFile("/root/hello.txt"); // Uint8Array
 
-await sandbox.mkdirFile("/workspace/out");
-await sandbox.moveFile("/workspace/hello.txt", "/workspace/out/hello.txt");
+await sandbox.mkdirFile("/root/out");
+await sandbox.moveFile("/root/hello.txt", "/root/out/hello.txt");
 
-for (const entry of await sandbox.listFiles("/workspace/out")) {
+for (const entry of await sandbox.listFiles("/root/out")) {
   console.log(entry.name, entry.size);
 }
 
-await sandbox.uploadFile("./local.json", "/workspace/out/local.json");
-await sandbox.downloadFile("/workspace/out/local.json", "./copy.json");
-await sandbox.removeFile("/workspace/out", true); // recursive
+await sandbox.uploadFile("./local.json", "/root/out/local.json");
+await sandbox.downloadFile("/root/out/local.json", "./copy.json");
+await sandbox.removeFile("/root/out", true); // recursive
 ```
 
 ## Previews

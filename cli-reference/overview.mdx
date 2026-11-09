@@ -35,7 +35,7 @@ Both work on macOS and Linux. Every command supports `-h`/`--help`, and `bonya -
     `login`, `console`, `create`
   </Card>
   <Card title="Sandboxes" icon="server" href="/cli-reference/sandboxes">
-    `list`, `get`, `delete`, `exec`
+    `list`, `get`, `delete`, `exec`, `job`, `schedule`, `template`
   </Card>
   <Card title="Inside a sandbox" icon="terminal" href="/cli-reference/fs">
     `fs`, `session`, `preview`, `snapshot`
@@ -67,7 +67,7 @@ Every command that takes a sandbox accepts **either a name or an id, in the same
 
 ```shell
 bonya console web                                    # by name
-bonya console sbx-4f1c9a2b3c4d5e6f7a8b9c0d1e2f3a4b   # by id
+bonya console sb-iwmjfuuyixl300   # by id
 ```
 
 ### How resolution works
@@ -75,15 +75,11 @@ bonya console sbx-4f1c9a2b3c4d5e6f7a8b9c0d1e2f3a4b   # by id
 The CLI decides what an argument means with a fixed algorithm (`resolveSandboxRef`):
 
 1. **Empty argument** — omit the sandbox entirely and it opens a picker over every sandbox in scope. If your account has none yet, it offers to create one.
-2. **Id shape** — a value matching `^sbx-[0-9a-f]{32}$` (the literal `sbx-` prefix followed by 32 lowercase hex characters) is looked up directly as an id, with no list call.
+2. **Id shape** — a value matching `^sb-[0-9a-z]{14}$` (the literal `sb-` prefix followed by 14 lowercase letters or digits) is looked up directly as an id, with no list call.
 3. **Name match** — anything else is looked up by exact, case-sensitive name:
    - **Exactly one match** — resolves straight to that sandbox.
    - **No match** — the CLI says so, then (interactively) falls back to a picker over every sandbox; non-interactively it fails with a message telling you to pass an id or run `bonya list`.
    - **Multiple matches** — names are not unique, so the CLI narrows the picker to just the matching sandboxes; non-interactively it fails and lists their ids so you can disambiguate.
-
-<Note>
-Server-generated names never collide with the id shape by accident — ids are an internal, fixed 36-character format, so a name would have to be deliberately crafted to match it.
-</Note>
 
 ### `--by-name`
 
@@ -92,7 +88,7 @@ Server-generated names never collide with the id shape by accident — ids are a
 This exists for the one case the shape check can't cover on its own: a sandbox deliberately (or accidentally) named to look exactly like an id.
 
 ```shell
-bonya get sbx-4f1c9a2b3c4d5e6f7a8b9c0d1e2f3a4b --by-name
+bonya get sb-iwmjfuuyixl300 --by-name
 ```
 
 ## Scripting

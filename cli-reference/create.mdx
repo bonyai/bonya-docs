@@ -1,94 +1,49 @@
 ---
 title: create
-description: Create a new sandbox from a template
+description: Create a new sandbox
 ---
-
-import { TerminalOutput } from "/snippets/terminal-output.jsx";
 
 ## `bonya create [name]`
 
 <Info>Aliases: `new`, `c`</Info>
 
-Starts a new sandbox from a template.
+Starts a new sandbox from the default template, a public container image, or a snapshot, and returns once it is running.
 
 ```shell
-bonya create --template bonya-dev        # generated name
-bonya create web --template bonya-dev    # named "web"
-bonya create                               # deployment default template
+bonya create                                  # generated name
+bonya create web                              # named "web"
+bonya create python --image python:3.12-slim  # from a public image
+bonya create web --snapshot snp-0a1b2c3d4e5f6g  # restore a snapshot's files
 ```
 
-When `--template` is omitted, the CLI uses the deployment's configured default template. The name is optional and **positional** — leave it out and the service generates a friendly one (like `swift-otter-9c3f`), which is printed as part of the result. Names are not unique, so two sandboxes can share the same one.
+The name is optional and **positional**. Leave it out and the service generates a friendly one (like `winter-canyon-278e`). Names are not unique.
 
 ## Flags
 
 | Flag | Default | Description |
 | --- | --- | --- |
-| `--template` | deployment default | Template to create the sandbox from. Interactive terminals offer the published catalog when omitted. |
-| `--version` | server-selected version | Template version to use. Requires `--template`. |
-| `--wait` | `ready` | Either `ready` (block until the sandbox is ready) or `none` (return immediately after the create call is accepted). |
+| `--image` | — | A public container image reference (tag or digest). Cannot be combined with `--snapshot`. |
+| `--snapshot` | — | A snapshot id to restore the sandbox's files from. |
+| `--name` | — | Display name. Prefer the positional form. |
 | `--idempotency-key` | — | Idempotency key for the create request. |
-| `--name` | — | Display name for the sandbox. Prefer the positional form; kept for scripts written against it before the positional form existed. |
 
-### Positional name vs. `--name`
-
-If you pass both a positional name and `--name` and they disagree, `create` fails:
+A real create looks like this:
 
 ```console
-$ bonya create web --name api --template bonya-dev
-name given twice: "web" and --name "api"
+$ bonya create docs-probe
+ID       sb-iwmjfuuyixl300
+NAME     docs-probe
+STATUS   running
+SOURCE   bonya-dev-x86_64-xeon8358-1c1024m-v1
+SIZE     1 vCPU, 1024 MiB
+CREATED  2026-11-10 00:56
+
+Open a shell with:
+  bonya console docs-probe
 ```
 
-Passing the same value both ways is harmless. In new scripts, prefer the positional form.
+On an interactive terminal, `create` offers to open a console right away. That offer is skipped, and the hint above is printed instead, under `--json`, `--no-input`, or any non-interactive session.
 
-## Post-create console offer
-
-On an interactive terminal, once the sandbox is ready `create` offers to open a console in it immediately — press Enter to accept (the prompt defaults to yes):
-
-```console
-$ bonya create --template bonya-dev
-id           sbx-4f1c9a2b3c4d5e6f7a8b9c0d1e2f3a4b
-name         swift-otter-9c3f
-status       running
-template     bonya-dev
-...
-
-Open a console now? (Y/n)
-```
-
-This offer is skipped — and the "open a shell with" hint is printed instead — under any of:
-
-- `--wait none` (the sandbox isn't up yet, so attaching would block on the boot you explicitly asked not to wait for)
-- `--json`
-- `--no-input`
-- a non-interactive session (piped, CI, etc.)
-
-## Examples
-
-<CodeGroup>
-```shell Generated name
-bonya create --template bonya-dev
-```
-
-```shell Explicit name
-bonya create web --template bonya-dev
-```
-
-```shell Don't wait for the sandbox to be ready
-bonya create --template bonya-dev --wait none
-```
-
-```shell Pin a template version
-bonya create --template bonya-dev --version 2024.11
-```
-</CodeGroup>
-
-On a real terminal, a successful create looks like this:
-
-<TerminalOutput lines={[
-  [{text: "ID       ", color: "#626262"}, {text: "  sbx-4f1c9a2b3c4d5e6f7a8b9c0d1e2f3a4b"}],
-  [{text: "NAME     ", color: "#626262"}, {text: "  web-server"}],
-  [{text: "STATUS   ", color: "#626262"}, {text: "  "}, {text: "running", color: "#5fd787"}],
-  [{text: "TEMPLATE ", color: "#626262"}, {text: "  bonya-dev"}],
-  [{text: "VERSION  ", color: "#626262"}, {text: "  2"}],
-  [{text: "OPERATION", color: "#626262"}, {text: "  "}, {text: "op-1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c", color: "#626262"}],
-]} />
+<Note>
+The CLI creates sandboxes from the default template, an image, or a snapshot. To create from a saved template, or to request a GPU, set a network policy or inject secret sets, use the [SDKs](/sdks/typescript/usage) or the [REST API](/api-reference).
+</Note>

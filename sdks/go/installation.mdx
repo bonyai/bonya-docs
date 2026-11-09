@@ -3,8 +3,7 @@ title: Installation
 description: Install and configure the Go SDK
 ---
 
-The Go SDK's module path is `github.com/bonyai/bonya-sdk-go`, package name
-`bonya`. It talks to the Bonya REST API over HTTPS, and to the sandbox edge over a WebSocket for streaming exec and terminal sessions.
+The Go SDK's module path is `github.com/bonyai/bonya-sdk-go`, package name `bonya`. It talks to the Bonya REST API over HTTPS, and to the sandbox edge over a WebSocket for streaming exec and terminal sessions.
 
 ## Requirements
 
@@ -20,8 +19,7 @@ go get github.com/bonyai/bonya-sdk-go
 
 ## Configure
 
-Every option has an environment-variable fallback, so the common case
-needs no options at all:
+Every option has an environment-variable fallback, so the common case needs no options at all:
 
 <CodeGroup>
 ```bash Environment variable
@@ -32,7 +30,6 @@ export BONYA_API_KEY=byk_...
 client, err := bonya.NewClient(
 	bonya.WithAPIKey("byk_..."),
 	bonya.WithOrganizationID("org_123"),
-	bonya.WithTimeout(30*time.Second),
 )
 ```
 </CodeGroup>
@@ -40,44 +37,19 @@ client, err := bonya.NewClient(
 | Option | Environment variable | Default |
 |---|---|---|
 | `WithAPIKey` | `BONYA_API_KEY` | *required* |
+| `WithEndpoint` | `BONYA_ENDPOINT` | `https://api.bonya.ai` |
+| `WithEdgeEndpoint` | `BONYA_EDGE_ENDPOINT` | the API endpoint |
 | `WithOrganizationID` | `BONYA_ORGANIZATION_ID` | your personal organization |
 | `WithCABundle` | `BONYA_CA_BUNDLE` | system trust store |
-| `WithTimeout` | — | `30 * time.Second` |
+| `WithTimeout` | — | 30 seconds |
 | `WithMaxRetries` | — | `2` |
-| `WithFilesystemReadLimit` | — | 64 MiB |
+| `WithHTTPClient` | — | a default `http.Client` |
 
-`WithAPIKey` (or `BONYA_API_KEY`) is required.
+Plain `http` endpoints are accepted only for loopback hosts. An empty organization id is an error, not a silent fallback to your personal organization.
 
-`WithCABundle` (or `BONYA_CA_BUNDLE`) points to a PEM bundle for private
-development CAs; if the file can't be read, `NewClient` returns an
-`*InvalidRequestError`.
+`WithMaxRetries` controls retries of transient failures. Mutations carry an `Idempotency-Key`, which the SDK keeps across its own retries, so a retried call joins the original instead of repeating it.
 
-`WithTimeout` is the default per-operation deadline; buffered and
-streaming exec calls can override it per call with `ExecOptions.Timeout`.
-`WithMaxRetries` controls SDK retries for retryable control-plane
-operations (create, get, list, delete, snapshot create, snapshot
-delete) — it retries transient failures while preserving the same request
-and idempotency key where one exists. `WithFilesystemReadLimit` caps bytes
-buffered by `sandbox.ReadFile`.
-
-<Note>
-An empty `WithOrganizationID("")` (or `BONYA_ORGANIZATION_ID=""`) makes
-`NewClient` return an `*InvalidRequestError` rather than silently falling
-back to your personal organization — this avoids CI jobs quietly running
-against the wrong tenant when a variable expansion is empty. See
-[Organizations](/sdks/go/usage#organizations) for the full precedence and
-a CI example.
-</Note>
-
-Close the client when done:
-
-```go
-client, err := bonya.NewClient()
-if err != nil {
-	log.Fatal(err)
-}
-defer client.Close()
-```
+A `Client` is safe for concurrent use. Create one and reuse it.
 
 ## Quickstart
 
@@ -93,29 +65,27 @@ import (
 )
 
 func main() {
+	ctx := context.Background()
+
 	client, err := bonya.NewClient() // reads BONYA_API_KEY
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer client.Close()
 
-	ctx := context.Background()
-	sandbox, err := client.CreateSandbox(ctx, "bonya-dev")
+	sandbox, err := client.Create(ctx, bonya.CreateOptions{})
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer sandbox.Delete(ctx)
 
-	result, err := sandbox.Exec(ctx, []string{"echo", "hello"}, bonya.ExecOptions{Check: true})
+	result, err := sandbox.Exec(ctx, "echo", "hello")
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Print(result.Stdout()) // hello
+	fmt.Print(result.Stdout) // hello
 }
 ```
 
-That is a real VM: it boots in about a second, runs anything Linux runs,
-and is gone when `Delete` runs.
+That is a real VM: it boots in about a second, runs anything Linux runs, and is gone when `Delete` returns.
 
-See [Usage](/sdks/go/usage) for the full surface — sessions, files,
-previews, snapshots, and error handling.
+See [Usage](/sdks/go/usage) for the full surface.

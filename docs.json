@@ -71,6 +71,7 @@
             "pages": [
               "concepts/sandboxes",
               "concepts/templates",
+              "concepts/secrets",
               "concepts/exec",
               "concepts/sessions",
               "concepts/files",
@@ -123,7 +124,10 @@
           {
             "group": "Sandboxes",
             "pages": [
-              "cli-reference/sandboxes"
+              "cli-reference/sandboxes",
+              "cli-reference/job",
+              "cli-reference/schedule",
+              "cli-reference/template"
             ]
           },
           {

@@ -3,19 +3,39 @@ title: Sandboxes
 description: The compute resource at the center of the Bonya API
 ---
 
-A **sandbox** is the resource everything else in the API is scoped to — sessions, exec, files, and previews all operate on a sandbox identified by its `sandbox_id`.
+A **sandbox** is the resource everything else in the API is scoped to. Sessions, exec, files, previews, snapshots and jobs all operate on a sandbox identified by its `id`.
 
 ## Identity
 
-A sandbox is created from a `template_id` and gets a server-assigned `sandbox_id`, which is the only identifier every other operation (sessions, exec, files, previews) accepts. A sandbox can also have a `name`, but names are a display label, not an identifier:
+A sandbox gets a server-assigned `id` such as `sb-bpyk22c3ei3hfx`, which is the only identifier every other operation accepts. A sandbox can also have a `name`, but names are a display label, not an identifier:
 
-- `name` is optional on create. If you omit it (or send a blank one), the service generates a friendly one.
-- `name` is **not unique**. The `name` query filter on list is an exact match, and because names aren't unique it can match more than one sandbox.
-- Sandboxes created before names existed as a field may have no `name` at all; every sandbox returned afterward carries one.
+- `name` is optional on create (up to 80 characters). If you omit it, the service generates a friendly one such as `winter-canyon-278e`.
+- `name` is **not unique**. The `name` filter on list is an exact match and can match more than one sandbox.
 
 <Note>
-Always key off `sandbox_id` in code you write against this API. Treat `name` as something to show a human, not something to look a sandbox up by.
+Always key off `id` in code you write against this API. Treat `name` as something to show a human.
 </Note>
+
+A sandbox looks like this:
+
+```json
+{
+  "id": "sb-2ofternj7d98tk",
+  "name": "scratch",
+  "organization_id": "org-muzwhim6z9e1s5",
+  "template_version": "bonya-dev-x86_64-xeon8358-1c1024m-v1",
+  "state": "running",
+  "generation": 1,
+  "vcpus": 1,
+  "memory_mib": 1024,
+  "user_layer_bytes": 10737418240,
+  "created_at": "2026-11-09T23:00:32.645482Z",
+  "started_at": "2026-11-09T23:00:32.691990029Z",
+  "network": { "mode": "open" }
+}
+```
+
+A sandbox runs as `root` with `HOME=/root`, starting in `/`.
 
 ## Lifecycle states
 
@@ -23,44 +43,49 @@ A sandbox's `state` is one of:
 
 | State | Meaning |
 | --- | --- |
-| `CREATING` | The sandbox is being provisioned after a create call. |
-| `RUNNING` | The sandbox is up and reachable for exec, sessions, files, and previews. |
-| `SUSPENDING` | The sandbox is in the process of being suspended. |
-| `SUSPENDED` | The sandbox is paused. |
-| `RESUMING` | The sandbox is transitioning back to `RUNNING` in response to a resume call. |
-| `FAILED` | Provisioning or a lifecycle transition failed. `failure_code` and `failure_message` describe why. |
+| `creating` | The sandbox is being provisioned. |
+| `running` | The sandbox is up and reachable for exec, sessions, files, and previews. |
+| `cooling` | The sandbox is going idle. |
+| `warm` | Paused with its memory kept on its node. The fastest wake. |
+| `cold` | Saved to storage and its node freed. No running cost, a slower wake with fresh processes. |
+| `waking` | Coming back to `running`. |
+| `failed` | Provisioning or a transition failed. `failure_reason` says why. |
+| `deleting` | Being torn down. |
+| `deleted` | Deleted. A tombstone, never returned by list. |
+| `lost` | The sandbox's host was lost. |
 
-Suspension is **automatic** — there is no endpoint to request it. The only lifecycle transition you invoke explicitly is resume:
+Idle sandboxes pause on their own, and traffic wakes them. You can also drive the lifecycle explicitly:
 
 <CodeGroup>
 ```shell cURL
-curl -s -X POST "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/resume" \
-  -H "Authorization: Bearer $BONYA_API_KEY"
+# pause (stage: warm or cold)
+curl -s -X POST "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/pause" \
+  -H "Authorization: Bearer $BONYA_API_KEY" -H "Content-Type: application/json" \
+  -d '{"stage": "warm"}'
+
+# keep awake for 30 minutes; also wakes a paused sandbox
+curl -s -X POST "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/keepalive" \
+  -H "Authorization: Bearer $BONYA_API_KEY" -H "Content-Type: application/json" \
+  -d '{"for": "30m"}'
 ```
 
 ```ts TypeScript
-const resume = await sandbox.resume({ idempotencyKey: "resume-job-123" });
-console.log(resume.sandboxId, resume.lifecycleOperationId, resume.alreadyRunning);
+await sandbox.pause("warm");
+await sandbox.keepalive(30 * 60); // also wakes a paused sandbox
 ```
 
 ```python Python
-resume = sandbox.resume(idempotency_key="resume-job-123")
-print(resume.sandbox_id, resume.lifecycle_operation_id, resume.already_running)
+sandbox.pause("warm")
+sandbox.keepalive(30 * 60)  # also wakes a paused sandbox
 ```
 
 ```go Go
-resume, err := sandbox.Resume(ctx, bonya.ResumeOptions{IdempotencyKey: "resume-job-123"})
-fmt.Println(resume.SandboxID, resume.LifecycleOperationID, resume.AlreadyRunning)
+err := sandbox.Pause(ctx, bonya.PauseWarm)
+until, err := sandbox.Keepalive(ctx, 30*time.Minute)
 ```
 </CodeGroup>
 
-There's no `bonya resume` CLI command — the CLI only resumes implicitly (for example, `bonya console` resumes a suspended sandbox before attaching). **MCP:** `sandbox_keepalive` wakes a paused sandbox, and `sandbox_pause` pauses one.
-
-This synchronously resumes a suspended sandbox back to `RUNNING`. The response is a `SandboxResume` object with `sandbox_id` and `already_running`: if the sandbox was already running, the call is a no-op and `already_running` is `true`, but it still returns `200`.
-
-<Note>
-There is no start, stop, wake, fork, or restore endpoint. Resume is the only explicit lifecycle verb this API exposes; every other transition happens on its own.
-</Note>
+There is no separate resume endpoint: **keepalive wakes a paused sandbox**. A sandbox paused explicitly is not woken by exec or preview traffic, so wake it with keepalive first. The CLI's `bonya console` wakes the sandbox for you. **MCP:** `sandbox_pause` and `sandbox_keepalive`.
 
 ## Creating a sandbox
 
@@ -69,27 +94,25 @@ There is no start, stop, wake, fork, or restore endpoint. Resume is the only exp
 curl -s -X POST "https://api.bonya.ai/v1/sandbox?wait=ready" \
   -H "Authorization: Bearer $BONYA_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"template_id": "bonya-dev"}'
+  -d '{"name": "scratch"}'
 ```
 
 ```shell CLI
-bonya create --template bonya-dev
+bonya create scratch
 ```
 
 ```ts TypeScript
 import { Bonya } from "@bonya-ai/bonya";
 
 const client = new Bonya();
-const sandbox = await client.createSandbox({ template: "bonya-dev" });
-console.log(sandbox.id);
+const sandbox = await client.createSandbox({ name: "scratch" });
 ```
 
 ```python Python
 from bonya import Bonya
 
 with Bonya() as client:
-    sandbox = client.create_sandbox(template="bonya-dev")
-    print(sandbox.id)
+    sandbox = client.create_sandbox(name="scratch")
 ```
 
 ```go Go
@@ -97,49 +120,46 @@ client, err := bonya.NewClient()
 if err != nil {
     log.Fatal(err)
 }
-defer client.Close()
-
-sandbox, err := client.CreateSandbox(ctx, "bonya-dev")
-if err != nil {
-    log.Fatal(err)
-}
-fmt.Println(sandbox.ID)
+sandbox, err := client.Create(ctx, bonya.CreateOptions{Name: "scratch"})
 ```
 </CodeGroup>
 
-**MCP:** the `sandbox_create` tool exposes this to any connected agent.
+**MCP:** `sandbox_create`.
 
-The request body (`SandboxCreate`) can omit `template_id` when the deployment
-has a configured default template. Otherwise, `template_id` is required.
-Optional fields:
+An empty body creates a sandbox from the deployment's default image. The request body accepts:
 
-- `template_version` — pins a specific template version; requires `template_id`.
-- `name` — display label, up to 80 characters. Not unique (see above).
-- `network` — a `NetworkPolicy` controlling egress (see below).
+| Field | Description |
+| --- | --- |
+| `name` | Display label, up to 80 characters. |
+| `template_id`, `template_revision` | Start from a saved [template](/concepts/templates). |
+| `image` | A public OCI image reference (tag or digest). Cannot be combined with `snapshot`, `template_id` or `template_version`. |
+| `snapshot` | Restore from a [snapshot](/concepts/snapshots). |
+| `gpu` | `{ "type": "...", "count": 1 }`. Requires an `image` (or an image template). See [GPUs](#gpus). |
+| `network` | A network policy (see [below](#network-policy)). |
+| `env` | Environment variables. |
+| `secret_sets` | Secret set **names** injected as environment variables. |
 
-By default, create returns **202 Accepted** with the sandbox in `CREATING` (or whatever state it's already reached) — it does not wait for the sandbox to be ready. Pass `?wait=ready` to block until the sandbox reaches a ready state, in which case the same call returns **201 Created** instead. Both responses share the same body shape: `{ "sandbox": { ...Sandbox } }`.
+By default, create returns **202 Accepted** with the sandbox still `creating`. Pass `?wait=ready` to block until it is running and get **201 Created** instead. Both return the sandbox object itself.
 
 <Note>
-The REST default is non-blocking, but every SDK's `createSandbox`/`create_sandbox`/`CreateSandbox` defaults the other way — to `Wait.READY`/blocking — matching the CLI's own `--wait ready` default. Pass `wait: "none"` (or the SDK's `Wait.NONE` equivalent) explicitly to get the REST default's immediate return instead.
+The REST default is non-blocking, but the TypeScript and Python SDKs default to waiting until the sandbox is ready, like the CLI. Pass `wait: "none"` / `Wait.NONE` to return immediately.
 </Note>
 
-Create also accepts an `Idempotency-Key` header — see [Idempotency](/concepts/idempotency) for exactly what that does and doesn't protect against.
+Create also accepts an `Idempotency-Key` header. See [Idempotency](/concepts/idempotency).
 
 ## Getting and listing sandboxes
 
-`GET /v1/sandbox/{sandbox_id}` returns a single sandbox as `{ "sandbox": { ...Sandbox } }`.
+`GET /v1/sandbox/{sandbox_id}` returns the sandbox. `GET /v1/sandbox` returns a page:
 
-`GET /v1/sandbox` returns a page of sandboxes:
+- `page_size` — 1 to 100.
+- `page_token` — the cursor from a previous page's `next_page_token`.
+- `states` — filter by one or more states (repeat the parameter).
+- `name` — exact-match filter.
 
-- `page_size` — 1 to 100, default 50.
-- `page_token` — opaque cursor from a previous page's `next_page_token`.
-- `states` — filter by one or more `SandboxState` values (repeat the query parameter for multiple states).
-- `name` — exact-match filter; can match more than one sandbox since names aren't unique.
-
-The response (`SandboxPage`) is `{ "sandboxes": [...], "next_page_token": "..." }`.
+The response is `{ "sandboxes": [...], "next_page_token": "..." }`.
 
 <Warning>
-`DELETED` is not a filterable state. A deleted sandbox is a tombstone, not a listable state — you can't ask the list endpoint for deleted sandboxes.
+`deleted` is not a filterable state. A deleted sandbox is a tombstone, so list never returns it.
 </Warning>
 
 ## Deleting a sandbox
@@ -151,7 +171,7 @@ curl -s -X DELETE "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID" \
 ```
 
 ```shell CLI
-bonya delete $SANDBOX_ID
+bonya delete scratch
 ```
 
 ```ts TypeScript
@@ -167,26 +187,38 @@ sandbox.Delete(ctx)
 ```
 </CodeGroup>
 
-**MCP:** the `sandbox_delete` tool tears down a sandbox the same way, and is likewise idempotent.
+**MCP:** `sandbox_delete`.
 
-Deletion is a **synchronous teardown** — it doesn't return until the sandbox is gone. Deleting an already-deleted (tombstoned) sandbox again returns `204`, the same as the first successful delete. An unknown `sandbox_id`, or one that belongs to a different organization than the caller's context, returns `404`.
+Delete returns `200` with the sandbox in state `deleted`. An unknown `id`, or one that belongs to a different organization than the caller's context, returns `404`.
 
 ## Network policy
 
-A sandbox can carry a `network` policy (`NetworkPolicy`) that controls outbound network egress. Its `mode` is one of:
+A sandbox's `network` policy controls outbound egress. Its `mode` is one of:
 
-- `standard` (default) — the platform's normal egress behavior.
-- `deny_all` — no outbound network access.
-- `custom` — egress is restricted to an explicit allowlist.
+- `open` (default) — unrestricted egress.
+- `allowlist` — only the listed rules.
+- `airgap` — no network access.
 
-When `mode` is `custom`, the policy must include an `allow` list of at least one `NetworkRule`, each with a `cidr` and an optional list of `ports` (1–65535). The `allow` list is capped at **64 rules**. For any mode other than `custom`, `allow` must be empty.
+In `allowlist` mode the policy lists `allow` rules, each either a `domain` or a `cidr`. Change a running sandbox's policy with `PATCH /v1/sandbox/{sandbox_id}/network`, or `sandbox.updateNetwork(...)` in the SDKs.
+
+```json
+{ "mode": "allowlist", "allow": [{ "domain": "pypi.org" }, { "cidr": "10.0.0.0/8" }] }
+```
+
+## Fork
+
+`POST /v1/sandbox/{sandbox_id}/fork` with `{ "count": 2 }` clones a running sandbox into that many new sandboxes. See [Snapshots](/concepts/snapshots).
+
+## GPUs
+
+List the GPU types and counts available to your organization with `GET /v1/sandbox/gpu-options` (`sandbox_gpu_options` over MCP, `listGpuOptions()` in the SDKs). An empty list means no GPU capacity is available. A GPU sandbox needs an `image` or an image template, and is subject to your organization's GPU limit.
 
 ## Related
-
-Sandboxes are the scope for everything else in the API:
 
 - [Exec](/concepts/exec) — run one-off commands directly against a sandbox.
 - [Sessions](/concepts/sessions) — long-lived, named command sessions inside a sandbox.
 - [Files](/concepts/files) — read, write, and manage files on a sandbox's filesystem.
-- [Jobs](/concepts/jobs) — a managed, tracked run of a command or script, optionally on a sandbox created just for it.
+- [Snapshots](/concepts/snapshots) — capture a sandbox's disk state, restore it, or fork it.
+- [Jobs](/concepts/jobs) — a managed, tracked run of a command or script.
 - [Previews](/concepts/previews) — expose a port running inside a sandbox as an HTTPS URL.
+- [Templates](/concepts/templates) — saved, versioned launch configurations.

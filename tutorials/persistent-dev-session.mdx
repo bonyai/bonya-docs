@@ -1,61 +1,42 @@
 ---
-title: A persistent session you can walk away from and come back to
-description: Start a long-running process in a managed session, disconnect on purpose, and reattach later — even after the sandbox has suspended and resumed
+title: Persistent dev session
+description: Start a long-running process in a managed session, disconnect on purpose, and reattach later
 ---
 
-import { TerminalOutput } from "/snippets/terminal-output.jsx";
-
-Start a long-running process in a managed session, disconnect from it on purpose, and reattach later — even after the sandbox has suspended and resumed. This is the one thing plain `exec` can't do: a managed session outlives your connection (see [Sessions](/concepts/sessions)). Every command below uses the `bonya-dev` template; if you haven't installed the CLI or logged in yet, start with the [Quickstart](/quickstart).
+A [session](/concepts/sessions) is a named process that outlives your connection and replays what it produced while nobody was attached.
 
 <Steps>
   <Step title="Create a sandbox">
     ```shell
-    bonya create worker --template bonya-dev
+    bonya create worker
     ```
-
-    <TerminalOutput lines={[
-      [{text: "ID       ", color: "#626262"}, {text: "  sbx-b30c1df7b6d0106ad2bc77558f446f13"}],
-      [{text: "NAME     ", color: "#626262"}, {text: "  worker"}],
-      [{text: "STATUS   ", color: "#626262"}, {text: "  "}, {text: "running", color: "#5fd787"}],
-      [{text: "TEMPLATE ", color: "#626262"}, {text: "  bonya-dev"}],
-      [{text: "VERSION  ", color: "#626262"}, {text: "  2"}],
-      [{text: "OPERATION", color: "#626262"}, {text: "  "}, {text: "op-6bf91e8410fb78874d9599ce0255859b", color: "#626262"}],
-      "",
-      [{text: "Open a shell with:", color: "#626262"}],
-      [{text: "  "}, {text: "bonya console worker", bold: true}],
-    ]} />
   </Step>
 
   <Step title="Start a managed session">
-    A simple loop stands in for any long-running process — a dev server, a queue worker, anything you'd otherwise leave running in a terminal you don't want to keep open.
-
     ```shell
-    bonya session create worker watcher -- sh -c 'i=0; while true; do i=$((i+1)); echo "tick $i"; sleep 5; done'
+    bonya session create worker dev -- sh -c 'i=0; while true; do i=$((i+1)); echo tick $i; sleep 1; done'
     ```
 
-    <TerminalOutput lines={[
-      [{text: "NAME       ", color: "#626262"}, {text: "  watcher"}],
-      [{text: "STATUS     ", color: "#626262"}, {text: "  "}, {text: "idle", color: "#ffd700"}],
-      [{text: "COMMAND    ", color: "#626262"}, {text: "  sh -c i=0; while true; do i=$((i+1)); echo \"tick $i\"; sleep 5; done"}],
-      [{text: "WORKING DIR", color: "#626262"}],
-    ]} />
+    ```console
+    NAME         dev
+    STATUS       idle
+    COMMAND      sh -c i=0; while true; do i=$((i+1)); echo tick $i; sleep 1; done
+    WORKING DIR
+    ```
   </Step>
 
   <Step title="Attach, watch it, then detach without killing it">
     ```shell
-    bonya session attach worker watcher
+    bonya session attach worker dev
     ```
 
-    <TerminalOutput lines={[
-      [{text: "Replaying 32B of earlier output."}],
-      [{text: "tick 1"}],
-      [{text: "tick 2"}],
-      [{text: "tick 3"}],
-      [{text: "tick 4"}],
-      [{text: "tick 5"}],
-    ]} />
+    ```console
+    tick 1
+    tick 2
+    tick 3
+    ```
 
-    Ctrl+D (or Ctrl+C once) detaches your terminal — it does not kill the session, unlike a plain `exec`.
+    You get the output the session produced before you attached. Detach (or lose your connection) and the process keeps running. Two minutes without typing also detaches an interactive attach.
   </Step>
 
   <Step title="Confirm it's still running from a fresh terminal">
@@ -63,88 +44,36 @@ Start a long-running process in a managed session, disconnect from it on purpose
     bonya session list worker
     ```
 
-    <TerminalOutput lines={[
-      [{text: "┌───────────────────────────────────────────────────────────────────────────────┐", color: "#444444"}],
-      [{text: "│", color: "#444444"}, {text: " "}, {text: "NAME", color: "#5fafff", bold: true}, {text: "     "}, {text: "STATUS", color: "#5fafff", bold: true}, {text: "  "}, {text: "ATTACHED", color: "#5fafff", bold: true}, {text: "  "}, {text: "COMMAND", color: "#5fafff", bold: true}, {text: "                           "}, {text: "STARTED", color: "#5fafff", bold: true}, {text: "          "}, {text: "│", color: "#444444"}],
-      [{text: "├───────────────────────────────────────────────────────────────────────────────┤", color: "#444444"}],
-      [{text: "│", color: "#444444"}, {text: " "}, {text: "watcher", color: "#5fd787"}, {text: "  "}, {text: "idle", color: "#ffd700"}, {text: "    "}, {text: "no", color: "#626262"}, {text: "        sh -c i=0; while true; do i=$((…  2026-09-21 12:54 "}, {text: "│", color: "#444444"}],
-      [{text: "└───────────────────────────────────────────────────────────────────────────────┘", color: "#444444"}],
-    ]} />
-
-    `ATTACHED` is now `no` — the session kept running after you detached.
-  </Step>
-
-  <Step title="What suspend and resume look like">
-    A sandbox suspends automatically after enough inactivity, and resuming is implicit the next time you reach it (see [Sandboxes](/concepts/sandboxes)). This particular session won't trigger that on its own — a detached session's own output still counts as activity and defers idle suspend, so a `tick`-every-5-seconds loop like `watcher` keeps the sandbox awake by design (see [Sessions](/concepts/sessions)). A quieter detached session (or the sandbox sitting untouched entirely) would suspend on its normal schedule instead.
-
-    Either way, listing sessions on a suspended sandbox doesn't wake it — you're served from a snapshot taken the moment it suspended, and the output says so explicitly:
-
-    ```shell
-    bonya session list worker
+    ```console
+    NAME  STATUS  ATTACHED  COMMAND                           STARTED
+    dev   idle    no        sh -c i=0; while true; do i=$((…  2026-11-10 01:05
     ```
-
-    <TerminalOutput lines={[
-      [{text: "┌───────────────────────────────────────────────────────────────────────────────┐", color: "#444444"}],
-      [{text: "│", color: "#444444"}, {text: " "}, {text: "NAME", color: "#5fafff", bold: true}, {text: "     "}, {text: "STATUS", color: "#5fafff", bold: true}, {text: "  "}, {text: "ATTACHED", color: "#5fafff", bold: true}, {text: "  "}, {text: "COMMAND", color: "#5fafff", bold: true}, {text: "                           "}, {text: "STARTED", color: "#5fafff", bold: true}, {text: "          "}, {text: "│", color: "#444444"}],
-      [{text: "├───────────────────────────────────────────────────────────────────────────────┤", color: "#444444"}],
-      [{text: "│", color: "#444444"}, {text: " "}, {text: "watcher", color: "#5fd787"}, {text: "  "}, {text: "idle", color: "#ffd700"}, {text: "    "}, {text: "no", color: "#626262"}, {text: "        sh -c i=0; while true; do i=$((…  2026-09-21 12:54 "}, {text: "│", color: "#444444"}],
-      [{text: "└───────────────────────────────────────────────────────────────────────────────┘", color: "#444444"}],
-      [{text: "Sandbox is suspended; listed from the suspend-time snapshot.", color: "#626262"}],
-    ]} />
   </Step>
 
   <Step title="Reattach">
-    Attaching to a suspended sandbox's session wakes it — the process was never stopped, it just wasn't being watched.
+    A sandbox pauses on its own when idle, and attaching wakes it. Run the same command to pick up where you left off:
 
     ```shell
-    bonya session attach worker watcher
+    bonya session attach worker dev
     ```
 
-    <TerminalOutput lines={[
-      [{text: "Replaying 135B of earlier output."}],
-      [{text: "tick 1"}],
-      [{text: "tick 2"}],
-      [{text: "tick 3"}],
-      [{text: "..."}],
-      [{text: "tick 14"}],
-      [{text: "tick 15"}],
-      [{text: "tick 16"}],
-    ]} />
-
-    The counter kept climbing the whole time — the same session, not a new one.
+    A sandbox you paused explicitly stays paused until you wake it with keepalive (see [Sandboxes](/concepts/sandboxes#lifecycle-states)).
   </Step>
 
   <Step title="Kill the session">
     ```shell
-    bonya session kill worker watcher
+    bonya session kill worker dev
     ```
 
-    <TerminalOutput lines={[
-      [{text: "NAME       ", color: "#626262"}, {text: "  watcher"}],
-      [{text: "STATUS     ", color: "#626262"}, {text: "  "}, {text: "killed", color: "#ff5f5f"}],
-      [{text: "COMMAND    ", color: "#626262"}, {text: "  sh -c i=0; while true; do i=$((i+1)); echo \"tick $i\"; sleep 5; done"}],
-      [{text: "WORKING DIR", color: "#626262"}],
-    ]} />
+    ```console
+    NAME         dev
+    STATUS       killed
+    ```
   </Step>
 
   <Step title="Clean up">
     ```shell
     bonya delete worker --force
     ```
-
-    <TerminalOutput lines={[
-      [{text: "Deleted sbx-b30c1df7b6d0106ad2bc77558f446f13"}],
-    ]} />
   </Step>
 </Steps>
-
-## Next steps
-
-<CardGroup cols={2}>
-  <Card title="Sessions" icon="terminal" href="/concepts/sessions">
-    The full attach/detach/replay model, and how the 1 MiB replay ring works.
-  </Card>
-  <Card title="Sandboxes" icon="cube" href="/concepts/sandboxes">
-    Lifecycle states, and exactly when suspend and resume happen.
-  </Card>
-</CardGroup>

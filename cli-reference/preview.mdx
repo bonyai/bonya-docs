@@ -1,66 +1,51 @@
 ---
 title: preview
-description: Publish, list, and delete preview URLs for a port running inside a sandbox
+description: Publish a sandbox port at an HTTPS URL
 ---
 
 ## `bonya preview`
 
 <Info>Alias: `pv`</Info>
 
-A preview publishes one guest port at an HTTPS URL a browser can open. Ports must be in the range 1024–65535; privileged ports are never previewable.
+A preview publishes a port inside a sandbox at an HTTPS URL. See [Previews](/concepts/previews).
 
 ## `create`
 
-Publishes a preview URL for a guest port.
-
 ```shell
-bonya preview create [sandbox] <port> [--auth token|public] [--name web]
+bonya preview create [sandbox] <port> [--auth private|public] [--grant-ttl 8h]
 ```
 
 | Flag | Default | Description |
 | --- | --- | --- |
-| `--auth` | `token` | `token` (URL requires a credential) or `public` (URL is reachable by anyone who has it). |
-| `--name` | — | Display name for the preview (max 80 bytes). |
-| `--by-name` | `false` | Treat the sandbox argument as a name even if it looks like an id. |
+| `--auth` | `private` | `private` requires a grant token; `public` lets anyone with the URL in. |
+| `--grant-ttl` | service default | How long your browser may open a private preview. |
 
-<Warning>
-`--auth public` means anyone with the URL reaches the service running in your sandbox with **no credential at all**. The CLI marks public preview URLs in red in its output as a reminder. Use the default `token` mode unless you specifically need to share the URL with people who don't have a Bonya session.
-</Warning>
+Ports must be 1024–65535.
 
-<CodeGroup>
-```shell Default (token-authenticated)
-bonya preview create web 3000
+```console
+$ bonya preview create docs-probe 3000
+ID          pv-7bqqhlip54hrli6pgtrbdgz4xi
+URL         https://pv-7bqqhlip54hrli6pgtrbdgz4xi.tv.bonya.ai
+PORT        3000
+AUTH        private
+OPEN        https://pv-7bqqhlip54hrli6pgtrbdgz4xi.tv.bonya.ai/?bonya_token=bpv_...
+GRANT ENDS  2026-11-10 01:56
+
+Open the OPEN URL once in your browser; it is shown only now and works for whoever has it.
 ```
 
-```shell Named
-bonya preview create web 3000 --name app
-```
-
-```shell Public — no credential required
-bonya preview create web 8080 --auth public
-```
-</CodeGroup>
+The `OPEN` URL carries a one-time grant token. It is shown only at creation.
 
 ## `list`
 
-Lists previews for a sandbox.
-
-```shell
-bonya preview list [sandbox]
-```
-
-```shell
-bonya preview list web
+```console
+$ bonya preview list docs-probe
+ID                             URL                                                PORT  AUTH
+pv-7bqqhlip54hrli6pgtrbdgz4xi  https://pv-7bqqhlip54hrli6pgtrbdgz4xi.tv.bonya.ai  3000  private
 ```
 
 ## `delete`
 
-Deletes a preview.
-
 ```shell
 bonya preview delete [sandbox] <preview-id>
-```
-
-```shell
-bonya preview delete web pv-a1b2c3
 ```

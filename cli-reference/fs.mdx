@@ -1,167 +1,49 @@
 ---
 title: fs
-description: Remote filesystem operations on a sandbox — read, write, upload, download, list, stat, mkdir, rm, mv
+description: Remote filesystem operations on a sandbox
 ---
-
-import { TerminalOutput } from "/snippets/terminal-output.jsx";
 
 ## `bonya fs`
 
 Reads and writes files inside a sandbox. Every subcommand names its sandbox by name or id, interchangeably, and omitting it opens a picker:
 
 ```shell
-bonya fs ls web /workspace
-bonya fs ls /workspace        # prompts for the sandbox
+bonya fs ls web /root
+bonya fs ls /root        # prompts for the sandbox
 ```
 
-All nine subcommands accept `--by-name` to force name interpretation of the sandbox argument.
+A fresh sandbox runs as `root` with `HOME=/root`. There is no `/workspace` directory; use `/root` or `/tmp`, or `mkdir` what you need.
 
-## `read` (alias: `cat`)
-
-Prints a remote file to stdout.
-
-```shell
-bonya fs read [sandbox] <path>
-```
-
-```shell
-bonya fs read web /etc/hostname
-bonya fs cat web /etc/hostname
-```
-
-## `write`
-
-Writes a local file — or stdin, with `-` — to a remote path.
-
-```shell
-bonya fs write [sandbox] <path> <local-file-or-->
-```
-
-<Warning>
-Argument order is **remote path, then local source** — the opposite order from `upload`. `write` exists mainly for piping stdin straight to a remote file; `upload` exists for local-file-to-remote-file with the more intuitive source-then-destination order.
-</Warning>
-
-<CodeGroup>
-```shell From a local file
-bonya fs write web /workspace/notes.txt ./notes.txt
-```
-
-```shell From stdin
-echo 'hello' | bonya fs write web /workspace/hello.txt -
-```
-</CodeGroup>
-
-## `upload`
-
-Uploads a local file to a remote path. Source, then destination — the familiar order.
-
-```shell
-bonya fs upload [sandbox] <local> <remote>
-```
-
-```shell
-bonya fs upload web ./dist.tar.gz /workspace/dist.tar.gz
-```
-
-## `download`
-
-Downloads a remote file to a local path.
-
-```shell
-bonya fs download [sandbox] <remote> <local>
-```
-
-```shell
-bonya fs download web /workspace/output.log ./output.log
-```
-
-## `ls`
-
-Lists a remote directory.
-
-```shell
-bonya fs ls [sandbox] <path>
-```
-
-```shell
-bonya fs ls web /workspace
-```
-
-On a real terminal, `bonya fs ls` looks like this:
-
-<TerminalOutput lines={[
-  [{text: "┌─────────────────────────────────────────────────────┐", color: "#444444"}],
-  [{text: "│", color: "#444444"}, {text: " "}, {text: "NAME", color: "#5fafff", bold: true}, {text: "       "}, {text: "KIND", color: "#5fafff", bold: true}, {text: "       "}, {text: "SIZE", color: "#5fafff", bold: true}, {text: "   "}, {text: "MODE", color: "#5fafff", bold: true}, {text: "  "}, {text: "MODIFIED", color: "#5fafff", bold: true}, {text: "         "}, {text: "│", color: "#444444"}],
-  [{text: "├─────────────────────────────────────────────────────┤", color: "#444444"}],
-  [{text: "│", color: "#444444"}, {text: " "}, {text: "README.md", color: "#5fd787"}, {text: "  file       15B    0644  2026-09-20 14:32 "}, {text: "│", color: "#444444"}],
-  [{text: "│", color: "#444444"}, {text: " "}, {text: "index.js", color: "#5fd787"}, {text: "   file       18B    0644  2026-09-20 14:32 "}, {text: "│", color: "#444444"}],
-  [{text: "│", color: "#444444"}, {text: " "}, {text: "src/", color: "#5fafff"}, {text: "       directory  4.0KB  0755  2026-09-20 14:32 "}, {text: "│", color: "#444444"}],
-  [{text: "└─────────────────────────────────────────────────────┘", color: "#444444"}],
-]} />
-
-## `stat`
-
-Shows metadata (kind, size, mode, modified time) for a remote path.
-
-```shell
-bonya fs stat [sandbox] <path>
-```
-
-```shell
-bonya fs stat web /workspace/app.py
-```
-
-## `mkdir`
-
-Creates a remote directory.
-
-```shell
-bonya fs mkdir [sandbox] <path>
-```
-
-```shell
-bonya fs mkdir web /workspace/logs
-```
-
-## `rm`
-
-Removes a remote file or directory.
-
-```shell
-bonya fs rm [sandbox] <path> [--recursive]
-```
-
-| Flag | Default | Description |
+| Subcommand | Usage | Description |
 | --- | --- | --- |
-| `--recursive` | `false` | Remove directories recursively. |
+| `read` (`cat`) | `bonya fs read [sandbox] <path>` | Print a remote file to stdout. |
+| `write` | `bonya fs write [sandbox] <path> <local-file-or->` | Write a local file (or stdin with `-`) to a remote path. |
+| `upload` | `bonya fs upload [sandbox] <local> <remote>` | Upload a local file. |
+| `download` | `bonya fs download [sandbox] <remote> <local>` | Download a remote file. |
+| `ls` | `bonya fs ls [sandbox] <path>` | List a directory. |
+| `stat` | `bonya fs stat [sandbox] <path>` | Show metadata about a path. |
+| `mkdir` | `bonya fs mkdir [sandbox] <path>` | Create a directory. |
+| `rm` | `bonya fs rm [sandbox] <path> [--recursive]` | Remove a file or directory. |
+| `mv` | `bonya fs mv [sandbox] <from> <to>` | Move or rename. |
 
-```shell
-bonya fs rm web /workspace/tmp.txt
-bonya fs rm web /workspace/build --recursive
+```console
+$ bonya fs write docs-probe /tmp/a.txt ./local.txt
+Wrote 3B to /tmp/a.txt
+
+$ bonya fs read docs-probe /tmp/a.txt
+hi
+
+$ bonya fs stat docs-probe /tmp/a.txt
+PATH      /tmp/a.txt
+NAME      a.txt
+KIND      file
+SIZE      3B
+MODE      0644
+MODIFIED  2026-11-10 00:56
+
+$ bonya fs ls docs-probe /tmp
+NAME   KIND  SIZE  MODE  MODIFIED
+a.txt  file  3B    0644  2026-11-10 00:56
 ```
 
-## `mv`
-
-Moves (renames) a remote file or directory.
-
-```shell
-bonya fs mv [sandbox] <src> <dst>
-```
-
-```shell
-bonya fs mv web /workspace/draft.md /workspace/final.md
-```
-
-## All subcommands at a glance
-
-| Command | Arguments | Notes |
-| --- | --- | --- |
-| `read` (`cat`) | `<path>` | Prints to stdout. |
-| `write` | `<path> <local-or-->` | Remote path first, source second. |
-| `upload` | `<local> <remote>` | Source first, remote path second. |
-| `download` | `<remote> <local>` | |
-| `ls` | `<path>` | |
-| `stat` | `<path>` | |
-| `mkdir` | `<path>` | |
-| `rm` | `<path>` | `--recursive` for directories. |
-| `mv` | `<src> <dst>` | |
+`ls` marks directories with a trailing `/` and shows symlinks with the kind `symlink`. A missing path fails with `not found`.

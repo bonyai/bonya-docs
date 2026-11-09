@@ -1,105 +1,83 @@
 ---
 title: Templates
-description: The image a sandbox is created from
+description: Saved, versioned launch configurations for your organization
 ---
 
-Every sandbox starts from a **template**. The deployment publishes an immutable
-catalog of template IDs and versions at `GET /v1/templates`.
+A **template** is a saved launch configuration: an image, resources, environment, secrets, network policy and previews. Templates belong to your organization and are versioned: changing the configuration publishes a new immutable `revision`.
 
-## Discovering templates
+You don't need a template to create a sandbox. An empty `POST /v1/sandbox` uses the deployment's default image, and `image` starts from any public OCI image. Templates are for launch settings you want to reuse.
 
-The catalog is shared by every caller in the deployment and is not scoped to
-an organization. Each entry includes its `template_id`, immutable `version`,
-digest, and optional metadata: a description, base OS, preinstalled language
-stacks, and available agent CLIs.
+## Managing templates
 
 <CodeGroup>
 ```shell cURL
-curl -s "https://api.bonya.ai/v1/templates" \
-  -H "Authorization: Bearer $BONYA_API_KEY"
+curl -s -X POST "https://api.bonya.ai/v1/templates" \
+  -H "Authorization: Bearer $BONYA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "node-dev", "config": {"image": "node:22", "cpu": 2, "memory_mib": 4096}}'
 ```
 
 ```ts TypeScript
-const templates = await client.listTemplates();
-for (const template of templates) {
-  console.log(template.id, template.version, template.isDefault, template.metadata.os);
-}
+const template = await client.createTemplate({
+  name: "node-dev",
+  config: { image: "node:22", cpu: 2, memoryMib: 4096 },
+});
+const all = await client.listTemplates();
+await client.updateTemplate(template.id, { config: { image: "node:22", cpu: 4 } }); // revision 2
+await client.deleteTemplate(template.id);
 ```
 
 ```python Python
-templates = client.list_templates()
-for template in templates:
-    print(template.id, template.version, template.is_default, template.metadata.os)
-```
-
-```go Go
-templates, err := client.ListTemplates(ctx)
-for _, template := range templates {
-    fmt.Println(template.ID, template.Version, template.IsDefault, template.Metadata.OS)
-}
+template = client.create_template(
+    "node-dev",
+    config=TemplateConfig(image="node:22", cpu=2, memory_mib=4096),
+)
+all_templates = client.list_templates()
+client.update_template(template.id, config=TemplateConfig(image="node:22", cpu=4))  # revision 2
+client.delete_template(template.id)
 ```
 </CodeGroup>
 
-There's no `bonya template` CLI command; `bonya create` offers the catalog interactively instead. **MCP:** the `template_list` tool exposes the same catalog.
+| Endpoint | Description |
+| --- | --- |
+| `GET /v1/templates` | List templates, each at its latest revision. |
+| `POST /v1/templates` | Validate the configuration, resolve the image to a digest, and publish revision 1. |
+| `GET /v1/templates/{template_id}` | Get a template. Pass `?revision=N` for an older revision. |
+| `PATCH /v1/templates/{template_id}` | Omitted fields keep their value. Changing the configuration publishes a new revision. |
+| `DELETE /v1/templates/{template_id}` | Delete a template. |
 
-```json
-{
-  "templates": [{
-    "template_id": "bonya-dev",
-    "version": "2026.08",
-    "digest": "sha256:…",
-    "is_default": true,
-    "metadata": {
-      "description": "Ubuntu base image with session support.",
-      "os": "ubuntu",
-      "os_version": "24.04",
-      "stacks": [{ "name": "go", "version": "1.25" }],
-      "agent_cli_support": ["codex"]
-    }
-  }]
-}
-```
+**MCP:** `template_list`, `template_get`, `template_create`, `template_update`, `template_delete`. The CLI can browse templates with [`bonya template list`](/cli-reference/template).
 
-`is_default` applies **within a template ID**: it identifies the version the
-service resolves when a request names that ID but omits its version. It is not
-a deployment-wide default, so more than one catalog entry can have
-`is_default: true`.
+## Configuration
+
+| Field | Description |
+| --- | --- |
+| `image` | OCI image reference. The service resolves it to `image_digest` on save. |
+| `registry_connection_id` | A [registry connection](/concepts/secrets#registry-connections) for a private image. |
+| `cpu`, `memory_mib`, `disk_gib` | Resources. |
+| `env` | Environment variables. |
+| `secret_bindings` | Maps an environment variable name to a [secret](/concepts/secrets) id. |
+| `secret_sets` | [Secret set](/concepts/secrets#secret-sets) **names** injected as environment variables. |
+| `entrypoint`, `command` | `null` inherits the image default; an array overrides it. |
+| `working_dir` | Working directory. |
+| `network` | A [network policy](/concepts/sandboxes#network-policy). |
+| `previews` | Ports to publish on start. |
+
+A template contains secret **references**, never values.
 
 ## Creating from a template
 
-<ParamField body="template_id" type="string">
-  Identifies the image to create the sandbox from. Omit it, along with
-  `template_version`, to use the deployment's configured default template.
-</ParamField>
-<ParamField body="template_version" type="string">
-  Optionally pins a specific immutable version. It is only meaningful with a
-  `template_id`.
-</ParamField>
-
-Both fields are set on [sandbox create](/concepts/sandboxes#creating-a-sandbox)
-(`POST /v1/sandbox`). The created `Sandbox` echoes the resolved
-`template_id` and `template_version`.
+Set `template_id` (and optionally `template_revision`) when you [create a sandbox](/concepts/sandboxes#creating-a-sandbox):
 
 ```json
-{ "template_id": "bonya-dev" }
+{ "template_id": "tpl-...", "template_revision": 2 }
 ```
 
-The request above uses the selected template ID's default version. To use the
-deployment default template instead, send an empty body (or omit both template
-fields):
-
-```json
-{}
-```
-
-If the deployment has no configured default, `template_id` is required.
-
-<Note>
-A job's `new_sandbox` spec accepts the same `template_id`/`template_version` fields as sandbox create, and can omit them the same way to fall back to the deployment default. See [Jobs](/sdks/go/usage#jobs) (or the equivalent page for your SDK) for the job spec shape.
-</Note>
+A job's `new_sandbox` spec accepts the same fields. See [Jobs](/concepts/jobs).
 
 ## Related
 
 <CardGroup cols={2}>
   <Card title="Sandboxes" icon="box" href="/concepts/sandboxes" />
+  <Card title="Secrets and registries" icon="key" href="/concepts/secrets" />
 </CardGroup>

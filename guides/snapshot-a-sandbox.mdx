@@ -11,7 +11,7 @@ To start a new sandbox from a snapshot, pass its id to create (`snapshot` in the
 
 ## Create a snapshot
 
-The source sandbox must be **running** — suspended, failed, or already-deleted sandboxes are rejected rather than snapshotted.
+The source sandbox must be **running** — paused, failed, or already-deleted sandboxes are rejected rather than snapshotted.
 
 <CodeGroup>
 ```shell CLI
@@ -19,24 +19,25 @@ bonya snapshot create web
 ```
 
 ```python Python
-snapshot = sandbox.snapshot(idempotency_key="snapshot-job-123")
+snapshot = sandbox.snapshot(name="baseline", idempotency_key="snapshot-job-123")
 print(snapshot.id, snapshot.source_sandbox_id)
 ```
 
 ```ts TypeScript
-const snapshot = await sandbox.snapshot({ idempotencyKey: "snapshot-job-123" });
+const snapshot = await sandbox.snapshot({ name: "baseline", idempotencyKey: "snapshot-job-123" });
 console.log(snapshot.id, snapshot.sourceSandboxId);
 ```
 
 ```go Go
-snapshot, err := sandbox.Snapshot(ctx, bonya.SnapshotOptions{
+snapshot, err := sandbox.CreateSnapshot(ctx, bonya.SnapshotOptions{
+	Name:           "baseline",
 	IdempotencyKey: "snapshot-job-123",
 })
-fmt.Println(snapshot.ID, snapshot.SourceSandboxID)
+fmt.Println(snapshot.ID, snapshot.SandboxID)
 ```
 </CodeGroup>
 
-The SDKs accept (or auto-generate) an idempotency key for create, so a retried call returns the same snapshot identity rather than minting a second one. If the source sandbox isn't running, the SDKs raise/throw a specific error rather than a generic failure — a suspended source raises `SandboxSuspendedError`, a failed one `SandboxFailedError`, a deleted one `SandboxNotFoundError`/`SandboxDeletedError`.
+The SDKs accept (or auto-generate) an idempotency key for create, so a retried call returns the same snapshot identity rather than minting a second one. If the source sandbox isn't running, the call fails with a `lifecycle_conflict` error.
 
 ## Delete a snapshot
 
@@ -58,8 +59,7 @@ await snapshot.delete(); // no-op
 ```
 
 ```go Go
-snapshot.Delete(ctx)
-snapshot.Delete(ctx) // no-op
+client.DeleteSnapshot(ctx, snapshot.ID)
 ```
 </CodeGroup>
 

@@ -24,7 +24,7 @@ Synchronous, non-TTY, JSON request and response — no WebSocket upgrade involve
 curl -s -X POST "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/exec" \
   -H "Authorization: Bearer $BONYA_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"cmd": ["echo", "hello from bonya"]}'
+  -d '{"command": ["echo", "hello from bonya"]}'
 ```
 
 ```shell CLI
@@ -42,29 +42,29 @@ print(result.stdout, result.exit_code)
 ```
 
 ```go Go
-result, err := sandbox.Exec(ctx, []string{"echo", "hello from bonya"})
+result, err := sandbox.Exec(ctx, "echo", "hello from bonya")
 if err != nil {
     log.Fatal(err)
 }
-fmt.Println(result.Stdout(), result.ExitCode)
+fmt.Println(result.Stdout, result.ExitCode)
 ```
 </CodeGroup>
 
 **MCP:** the `sandbox_exec` tool runs a buffered command the same way.
 
-The request body (`DirectExecRequest`) extends the common command shape:
+The request body:
 
-<ParamField body="cmd" type="string[]" required>
+<ParamField body="command" type="string[]" required>
   Argv to run. At least one element.
 </ParamField>
 <ParamField body="env" type="object">
   Environment variables to set.
 </ParamField>
-<ParamField body="path" type="string">
+<ParamField body="working_dir" type="string">
   Working directory.
 </ParamField>
-<ParamField body="timeout_s" type="integer">
-  Timeout in seconds, 1–300.
+<ParamField body="timeout_ms" type="integer">
+  Timeout in milliseconds. The default is 60 seconds and the maximum is 10 minutes.
 </ParamField>
 <ParamField body="stdin_b64" type="string">
   Base64-encoded stdin to feed the process.
@@ -73,19 +73,19 @@ The request body (`DirectExecRequest`) extends the common command shape:
   `utf8` or `base64`, controlling how `stdout`/`stderr` are encoded in the response.
 </ParamField>
 
-Response (`DirectExecResponse`), always `200`:
+Response, always `200`:
 
 <ResponseField name="exit_code" type="integer" required>
   The process's exit code.
 </ResponseField>
-<ResponseField name="signaled" type="boolean" required>
+<ResponseField name="signaled" type="boolean">
   Whether the process was terminated by a signal.
 </ResponseField>
 <ResponseField name="signal" type="integer">
   The signal number, if `signaled` is true.
 </ResponseField>
-<ResponseField name="timed_out" type="boolean" required>
-  Whether `timeout_s` was reached before the process exited.
+<ResponseField name="took_ms" type="number" required>
+  How long the command ran, in milliseconds.
 </ResponseField>
 <ResponseField name="stdout" type="string" required>
   Captured stdout, encoded per `output_encoding`.
@@ -93,10 +93,10 @@ Response (`DirectExecResponse`), always `200`:
 <ResponseField name="stderr" type="string" required>
   Captured stderr, encoded per `output_encoding`.
 </ResponseField>
-<ResponseField name="stdout_truncated" type="boolean" required>
+<ResponseField name="stdout_truncated" type="boolean">
   Whether `stdout` was cut short.
 </ResponseField>
-<ResponseField name="stderr_truncated" type="boolean" required>
+<ResponseField name="stderr_truncated" type="boolean">
   Whether `stderr` was cut short.
 </ResponseField>
 <ResponseField name="output_encoding" type="string" required>
@@ -113,9 +113,9 @@ A non-zero `exit_code` is still a **200 response** — it is not an API error. B
 GET /v1/sandbox/{sandbox_id}/exec
 ```
 
-An HTTP upgrade to a WebSocket for a transient, interactive TTY session — one-off, not tracked as a named session. The START frame carries a `TTYStartRequest`. See [WebSockets](/concepts/websockets) for how the upgrade, START frame, and admission-at-START model work — that mechanism isn't repeated here.
+An HTTP upgrade to a WebSocket for a transient, interactive TTY session — one-off, not tracked as a named session. See [WebSockets](/concepts/websockets) for the protocol.
 
-There's no raw cURL example for this mode — it's a WebSocket upgrade, not a single request/response — but the CLI and every SDK reach it directly: the CLI's `--tty` flag and each SDK's `tty: true` option both drive this exact endpoint, not a separate mechanism.
+There's no raw cURL example for this mode — it's a WebSocket upgrade, not a single request/response — but the CLI and every SDK reach it directly.
 
 <CodeGroup>
 ```shell CLI
@@ -133,11 +133,14 @@ print(result.stdout)
 ```
 
 ```go Go
-result, err := sandbox.Exec(ctx, []string{"bash", "-lc", "stty size; printf done"}, bonya.ExecOptions{TTY: true, Check: true})
+result, err := sandbox.ExecWithOptions(ctx, bonya.ExecOptions{
+    Command: []string{"bash", "-lc", "stty size; printf done"},
+    TTY:     true,
+})
 if err != nil {
     log.Fatal(err)
 }
-fmt.Println(result.Stdout())
+fmt.Println(result.Stdout)
 ```
 </CodeGroup>
 

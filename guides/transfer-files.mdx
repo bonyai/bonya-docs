@@ -9,26 +9,26 @@ Every sandbox exposes a filesystem API under `/v1/sandbox/{sandbox_id}/fs`. Read
 
 <CodeGroup>
 ```shell cURL
-curl -s -X PUT "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/fs/write?path=/workspace/hello.txt" \
+curl -s -X PUT "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/fs/write?path=/root/hello.txt" \
   -H "Authorization: Bearer $BONYA_API_KEY" \
   -H "Content-Type: application/octet-stream" \
   --data-binary @./hello.txt
 ```
 
 ```shell CLI
-bonya fs upload $SANDBOX_ID ./hello.txt /workspace/hello.txt
+bonya fs upload web ./hello.txt /root/hello.txt
 ```
 
 ```ts TypeScript
-await sandbox.uploadFile("./hello.txt", "/workspace/hello.txt");
+await sandbox.uploadFile("./hello.txt", "/root/hello.txt");
 ```
 
 ```python Python
-sandbox.upload_file("./hello.txt", "/workspace/hello.txt")
+sandbox.upload_file("./hello.txt", "/root/hello.txt")
 ```
 
 ```go Go
-sandbox.UploadFile(ctx, "./hello.txt", "/workspace/hello.txt")
+sandbox.Upload(ctx, "./hello.txt", "/root/hello.txt")
 ```
 </CodeGroup>
 
@@ -38,25 +38,25 @@ sandbox.UploadFile(ctx, "./hello.txt", "/workspace/hello.txt")
 
 <CodeGroup>
 ```shell cURL
-curl -s "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/fs/read?path=/workspace/hello.txt" \
+curl -s "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/fs/read?path=/root/hello.txt" \
   -H "Authorization: Bearer $BONYA_API_KEY" \
   -o ./hello.downloaded.txt
 ```
 
 ```shell CLI
-bonya fs download $SANDBOX_ID /workspace/hello.txt ./hello.downloaded.txt
+bonya fs download web /root/hello.txt ./hello.downloaded.txt
 ```
 
 ```ts TypeScript
-await sandbox.downloadFile("/workspace/hello.txt", "./hello.downloaded.txt");
+await sandbox.downloadFile("/root/hello.txt", "./hello.downloaded.txt");
 ```
 
 ```python Python
-sandbox.download_file("/workspace/hello.txt", "./hello.downloaded.txt")
+sandbox.download_file("/root/hello.txt", "./hello.downloaded.txt")
 ```
 
 ```go Go
-sandbox.DownloadFile(ctx, "/workspace/hello.txt", "./hello.downloaded.txt")
+sandbox.Download(ctx, "/root/hello.txt", "./hello.downloaded.txt")
 ```
 </CodeGroup>
 
@@ -72,13 +72,13 @@ For short text content you don't want to stage as a local file first, `read`/`wr
 
 <CodeGroup>
 ```ts TypeScript
-await sandbox.writeFile("/workspace/message.txt", "hello\n");
-const payload = await sandbox.readFile("/workspace/message.txt");
+await sandbox.writeFile("/root/message.txt", "hello\n");
+const payload = await sandbox.readFile("/root/message.txt");
 ```
 
 ```python Python
-sandbox.write_file("/workspace/message.txt", "hello\n")
-payload = sandbox.read_file("/workspace/message.txt")
+sandbox.write_file("/root/message.txt", "hello\n")
+payload = sandbox.read_file("/root/message.txt")
 ```
 </CodeGroup>
 
@@ -86,20 +86,20 @@ payload = sandbox.read_file("/workspace/message.txt")
 
 <CodeGroup>
 ```shell cURL
-curl -s "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/fs/list?path=/workspace" \
+curl -s "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/fs/list?path=/root" \
   -H "Authorization: Bearer $BONYA_API_KEY"
 ```
 
 ```shell CLI
-bonya fs ls $SANDBOX_ID /workspace
+bonya fs ls web /root
 ```
 
 ```ts TypeScript
-const entries = await sandbox.listFiles("/workspace");
+const entries = await sandbox.listFiles("/root");
 ```
 
 ```python Python
-entries = sandbox.list_files("/workspace")
+entries = sandbox.list_files("/root")
 ```
 </CodeGroup>
 
@@ -109,20 +109,20 @@ The response is `{ "files": [ ...FsFileInfo ] }` — immediate children only, so
 
 <CodeGroup>
 ```shell cURL
-curl -s "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/fs/stat?path=/workspace/hello.txt" \
+curl -s "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/fs/stat?path=/root/hello.txt" \
   -H "Authorization: Bearer $BONYA_API_KEY"
 ```
 
 ```shell CLI
-bonya fs stat $SANDBOX_ID /workspace/hello.txt
+bonya fs stat web /root/hello.txt
 ```
 
 ```ts TypeScript
-const info = await sandbox.statFile("/workspace/hello.txt");
+const info = await sandbox.statFile("/root/hello.txt");
 ```
 
 ```python Python
-info = sandbox.stat_file("/workspace/hello.txt")
+info = sandbox.stat_file("/root/hello.txt")
 ```
 </CodeGroup>
 
@@ -136,35 +136,35 @@ info = sandbox.stat_file("/workspace/hello.txt")
 curl -s -X POST "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/fs/mkdir" \
   -H "Authorization: Bearer $BONYA_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"path": "/workspace/output"}'
+  -d '{"path": "/root/output"}'
 
 # rename
 curl -s -X POST "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/fs/rename" \
   -H "Authorization: Bearer $BONYA_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"from": "/workspace/hello.txt", "to": "/workspace/output/hello.txt"}'
+  -d '{"from": "/root/hello.txt", "to": "/root/output/hello.txt"}'
 
 # delete (recursive)
-curl -s -X DELETE "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/fs?path=/workspace/output&recursive=true" \
+curl -s -X DELETE "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/fs?path=/root/output&recursive=true" \
   -H "Authorization: Bearer $BONYA_API_KEY"
 ```
 
 ```shell CLI
-bonya fs mkdir $SANDBOX_ID /workspace/output
-bonya fs mv $SANDBOX_ID /workspace/hello.txt /workspace/output/hello.txt
-bonya fs rm $SANDBOX_ID /workspace/output --recursive
+bonya fs mkdir $SANDBOX_ID /root/output
+bonya fs mv $SANDBOX_ID /root/hello.txt /root/output/hello.txt
+bonya fs rm $SANDBOX_ID /root/output --recursive
 ```
 
 ```ts TypeScript
-await sandbox.mkdirFile("/workspace/output");
-await sandbox.moveFile("/workspace/hello.txt", "/workspace/output/hello.txt");
-await sandbox.removeFile("/workspace/output", true);
+await sandbox.mkdirFile("/root/output");
+await sandbox.moveFile("/root/hello.txt", "/root/output/hello.txt");
+await sandbox.removeFile("/root/output", true);
 ```
 
 ```python Python
-sandbox.mkdir_file("/workspace/output")
-sandbox.move_file("/workspace/hello.txt", "/workspace/output/hello.txt")
-sandbox.remove_file("/workspace/output", recursive=True)
+sandbox.mkdir_file("/root/output")
+sandbox.move_file("/root/hello.txt", "/root/output/hello.txt")
+sandbox.remove_file("/root/output", recursive=True)
 ```
 </CodeGroup>
 

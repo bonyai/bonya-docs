@@ -1,47 +1,49 @@
 ---
 title: snapshot
-description: Create and delete snapshots of a sandbox's state
+description: Create, list, and delete snapshots of a sandbox
 ---
 
 ## `bonya snapshot`
 
 <Info>Alias: `snap`</Info>
 
-Snapshots capture a running sandbox's state. Creating one requires the source sandbox to be **running** — suspended, failed, and deleted sandboxes are all rejected.
-
-<Note>
-There is no `snapshot list` command. `bonya snapshot` only supports `create` and `delete`.
-</Note>
+A snapshot captures a sandbox's files. Restore one into a new sandbox with [`bonya create --snapshot`](/cli-reference/create). See [Snapshots](/concepts/snapshots).
 
 ## `create`
 
-Creates a snapshot from a running sandbox.
-
 ```shell
-bonya snapshot create [sandbox]
+bonya snapshot create [sandbox] [--name NAME]
 ```
 
-| Flag | Default | Description |
-| --- | --- | --- |
-| `--idempotency-key` | — | Idempotency key for the snapshot create request. |
-| `--by-name` | `false` | Treat the sandbox argument as a name even if it looks like an id. |
+| Flag | Description |
+| --- | --- |
+| `--name` | Snapshot name, at most 128 bytes. Defaults to the sandbox name plus the UTC time. |
+| `--idempotency-key` | Idempotency key for the create request. |
 
-```shell
-bonya snapshot create web
+```console
+$ bonya snapshot create docs-probe --name base
+ID       snp-lq26mnn67u0egu
+NAME     base
+SOURCE   sb-iwmjfuuyixl300
+STATE    published
+FILES    10.0GB
+CREATED  2026-11-10 00:56
+```
+
+## `list`
+
+<Info>Alias: `ls`</Info>
+
+```console
+$ bonya snapshot list docs-probe
+ID                  NAME  STATE      FILES   CREATED
+snp-lq26mnn67u0egu  base  published  10.0GB  2026-11-10 00:56
 ```
 
 ## `delete`
 
-Deletes a snapshot.
+<Info>Alias: `rm`</Info>
 
 ```shell
 bonya snapshot delete [sandbox] <snapshot-id>
 ```
-
-```shell
-bonya snapshot delete web snp-a1b2c3d4e5f6
-```
-
-| Flag | Default | Description |
-| --- | --- | --- |
-| `--by-name` | `false` | Treat the sandbox argument as a name even if it looks like an id. |

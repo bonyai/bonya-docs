@@ -1,67 +1,72 @@
 ---
-title: Run a one-off script and collect its output
-description: Push a script into a disposable sandbox, run it, and see its full result — the CLI's built-in way to do a one-off batch run
+title: Run a one-off script
+description: Run a script on a throwaway sandbox as a job and look the result up later
 ---
 
-import { TerminalOutput } from "/snippets/terminal-output.jsx";
-
-Push a script into a disposable sandbox, run it once, and see its full result — no sandbox to create or clean up yourself. `bonya job run` handles all of that: by default it creates a sandbox just for this run and deletes it when the run ends. Every command below uses the deployment's default template; if you haven't installed the CLI or logged in yet, start with the [Quickstart](/quickstart).
+A [job](/concepts/jobs) runs a command or script, tracks it to completion, and can create (and delete) a sandbox just for the run.
 
 <Steps>
   <Step title="Write the script locally">
     ```shell
-    cat > report.sh << 'EOF'
+    cat > hello.sh <<'EOF2'
     #!/bin/sh
-    echo "Report generated at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    echo "Disk usage:"
-    df -h /workspace 2>/dev/null || df -h /
-    echo "Done."
-    EOF
+    echo "hello from $(hostname)"
+    uname -sr
+    EOF2
     ```
   </Step>
 
   <Step title="Run it as a job">
-    `--script` uploads and runs the file in one call; `job run` blocks until it finishes and prints the result. There's no sandbox to create first — one is provisioned for this run and torn down automatically when it's done.
+    `--new` creates a fresh sandbox for the run and deletes it afterwards. `--wait` blocks for the result, prints the output, and exits with the script's exit code.
 
     ```shell
-    bonya job run --script ./report.sh --name report
+    bonya job run --new --script ./hello.sh --wait
     ```
 
-    <TerminalOutput lines={[
-      [{text: "Report generated at 2026-09-21T11:32:28Z"}],
-      [{text: "Disk usage:"}],
-      [{text: "Filesystem      Size  Used Avail Use% Mounted on"}],
-      [{text: "/dev/root       3.9G  2.7G  1.1G  72% /"}],
-      [{text: "Done."}],
-      "",
-      [{text: "ID       ", color: "#626262"}, {text: "  d40295e5e0c9b89a1359721c31a3d6d54b75dea51c44080113b2f40baf9944e3"}],
-      [{text: "NAME     ", color: "#626262"}, {text: "  report"}],
-      [{text: "STATUS   ", color: "#626262"}, {text: "  completed"}],
-      [{text: "SANDBOX  ", color: "#626262"}, {text: "  sbx-c3e631452e349ec22ed2f2024d88285f"}],
-      [{text: "EXIT CODE", color: "#626262"}, {text: "  0"}],
-    ]} />
+    ```console
+    hello from sb-klk91oc6m8rsa8
+    Linux 4.19.0-gvisor
+    ```
 
-    The script's own stdout appears first, then the run's summary. `SANDBOX` is the disposable sandbox this run created — by the time this printed, it was already deleted.
+    Add `--keep` to keep the sandbox, `--timeout 10m` to bound the command, or `--env KEY=VALUE` to pass variables.
   </Step>
 
   <Step title="Look up the run later">
-    Every run gets an id you can hand to `job get` to see it again, including its full stored spec and timeline — useful if you didn't capture the output the first time:
+    Without `--wait`, `job run` prints the run id and returns immediately. List and inspect runs any time:
 
     ```shell
-    bonya job get d40295e5e0c9b89a1359721c31a3d6d54b75dea51c44080113b2f40baf9944e3
+    bonya job list --limit 1
     ```
 
-    Nothing to clean up — the run's own sandbox already tore itself down. Pass `--keep` to `job run` if you want the sandbox to survive the run instead.
+    ```console
+    RUN                 NAME  STATUS     SANDBOX            STARTED
+    run-mr8t6t3scvqdvq        completed  sb-klk91oc6m8rsa8  2026-11-10 01:05
+    ```
+
+    ```shell
+    bonya job get run-mr8t6t3scvqdvq
+    ```
+
+    ```console
+    RUN        run-mr8t6t3scvqdvq
+    NAME
+    STATUS     completed
+    SANDBOX    sb-klk91oc6m8rsa8
+    STARTED    2026-11-10 01:05
+    FINISHED   2026-11-10 01:05
+    EXIT CODE  0
+
+    stdout
+    hello from sb-klk91oc6m8rsa8
+    Linux 4.19.0-gvisor
+    ```
+  </Step>
+
+  <Step title="Run it on a schedule">
+    ```shell
+    bonya schedule create --new --every 1h --script ./hello.sh
+    ```
+
+    See [`bonya schedule`](/cli-reference/schedule).
   </Step>
 </Steps>
-
-## Next steps
-
-<CardGroup cols={2}>
-  <Card title="Jobs" icon="list-check" href="/concepts/jobs">
-    Job schedules, existing-sandbox targeting, and the full spec.
-  </Card>
-  <Card title="Transfer files" icon="folder-open" href="/guides/transfer-files">
-    The `fs` read/write/upload/download surface, for when you're working against a sandbox you already have.
-  </Card>
-</CardGroup>

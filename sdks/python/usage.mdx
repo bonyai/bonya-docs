@@ -41,7 +41,6 @@ from bonya import Bonya, Wait
 
 with Bonya() as client:
     sandbox = client.create_sandbox(
-        template="bonya-dev",
         wait=Wait.READY,
         idempotency_key="create-job-123",
     )
@@ -82,7 +81,7 @@ sandbox.refresh()  # update the handle's fields
 ```python
 result = sandbox.exec(
     ["bash", "-lc", "uname -a"],
-    cwd="/workspace",
+    cwd="/root",
     timeout=30,
     check=True,  # raise ExecFailedError on a non-zero exit
 )
@@ -127,18 +126,18 @@ Session names match `^[a-z][a-z0-9-]{0,31}$`.
 ## Files
 
 ```python
-sandbox.write_file("/workspace/hello.txt", "hello\n")
-data = sandbox.read_file("/workspace/hello.txt")  # bytes
+sandbox.write_file("/root/hello.txt", "hello\n")
+data = sandbox.read_file("/root/hello.txt")  # bytes
 
-sandbox.mkdir_file("/workspace/out")
-sandbox.move_file("/workspace/hello.txt", "/workspace/out/hello.txt")
+sandbox.mkdir_file("/root/out")
+sandbox.move_file("/root/hello.txt", "/root/out/hello.txt")
 
-for entry in sandbox.list_files("/workspace/out"):
+for entry in sandbox.list_files("/root/out"):
     print(entry.name, entry.size)
 
-sandbox.upload_file("./local.json", "/workspace/out/local.json")
-sandbox.download_file("/workspace/out/local.json", "./copy.json")
-sandbox.remove_file("/workspace/out", recursive=True)
+sandbox.upload_file("./local.json", "/root/out/local.json")
+sandbox.download_file("/root/out/local.json", "./copy.json")
+sandbox.remove_file("/root/out", recursive=True)
 ```
 
 ## Previews

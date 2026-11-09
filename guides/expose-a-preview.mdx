@@ -1,133 +1,115 @@
 ---
 title: Expose a preview
-description: Publish a port running inside a sandbox as an HTTPS URL
+description: Publish a port from a sandbox at an HTTPS URL
 ---
 
-If your sandbox is running a dev server or API on some port, a preview turns that port into an HTTPS URL a browser can open. See [Previews](/concepts/previews) for the full field reference; this guide walks through creating one, choosing an auth mode, and cleaning up.
+Start something listening in a sandbox, publish its port, and open it in a browser. For the full model (auth modes, grants), see [Previews](/concepts/previews).
 
-## Create a preview
+## 1. Start a server
+
+Run it in a [session](/concepts/sessions) so it keeps running after you disconnect:
 
 <CodeGroup>
+```shell CLI
+bonya session create web web-app -- python3 -m http.server 3000
+```
+
+```shell cURL
+curl -s -X POST "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/sessions" \
+  -H "Authorization: Bearer $BONYA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "web-app", "command": ["python3", "-m", "http.server", "3000"]}'
+```
+
+```ts TypeScript
+await sandbox.createSession("web-app", ["python3", "-m", "http.server", "3000"]);
+```
+
+```python Python
+sandbox.create_session("web-app", ["python3", "-m", "http.server", "3000"])
+```
+</CodeGroup>
+
+## 2. Publish the port
+
+Ports must be 1024–65535.
+
+<CodeGroup>
+```shell CLI
+bonya preview create web 3000
+```
+
 ```shell cURL
 curl -s -X POST "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/previews" \
   -H "Authorization: Bearer $BONYA_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"port": 3000, "name": "web"}'
-```
-
-```shell CLI
-bonya preview create $SANDBOX_ID 3000 --name web
+  -d '{"port": 3000}'
 ```
 
 ```ts TypeScript
-const preview = await sandbox.createPreview(3000, { name: "web" });
-console.log(preview.url); // https://pv-<26 chars>.tv.bonya.ai
+const preview = await sandbox.createPreview(3000);
+console.log(preview.url);
 ```
 
 ```python Python
-preview = sandbox.create_preview(3000, name="web")
+preview = sandbox.create_preview(3000)
 print(preview.url)
 ```
 
 ```go Go
-preview, err := sandbox.CreatePreview(ctx, 3000, bonya.CreatePreviewOptions{Name: "web"})
+preview, err := sandbox.CreatePreview(ctx, 3000, bonya.PreviewOptions{})
 fmt.Println(preview.URL)
 ```
 </CodeGroup>
 
-`port` must be 1024–65535 — privileged ports are never previewable. Create returns `201` with the created preview plus a `capability_jws` — that token is returned **only on create**, never again from list, so hold onto it if you need the token-mode exchange below.
+The response has the preview `url` and, for a private preview, a one-time `grant`:
 
-## Token vs. public auth
+```json
+{
+  "id": "pv-cgl24jcazom7pdd4dzu5dsc2oe",
+  "port": 3000,
+  "auth": "private",
+  "url": "https://pv-cgl24jcazom7pdd4dzu5dsc2oe.tv.bonya.ai",
+  "grant": {
+    "id": "pvg-mduwb73q6a5zogugmbeca3nrku",
+    "expires_at": "2026-11-10T00:03:21Z",
+    "token": "bpv_...",
+    "exchange_url": "https://pv-....tv.bonya.ai/?bonya_token=bpv_..."
+  }
+}
+```
 
-`auth_mode` (REST) / `auth` (SDK) is one of two values:
+## 3. Open it
 
-- **`token`** (default) — access is gated by a one-time browser exchange (below). This is what you want for anything not meant to be open to the internet.
-- **`public`** — anyone with the URL can view it, no credential at all. The only thing protecting a public preview is the 26 random characters in its hostname. Use this deliberately, for demos or sharing outside your organization — not as the default.
+A **private** preview (the default) is opened with the grant. Navigate once to `grant.exchange_url`; the gateway swaps the token for an `HttpOnly` cookie and redirects to the clean URL. The CLI prints this as `OPEN`, and the SDKs build it with `previewBrowserUrl` / `preview_browser_url`.
+
+<Warning>
+The `token` and `exchange_url` are shown only when the grant is created. Don't store them in a URL, log, or anywhere durable. If you lose one, create another grant.
+</Warning>
+
+A **public** preview needs no credential. Anyone with the URL can open it, so only choose it deliberately:
 
 <CodeGroup>
+```shell CLI
+bonya preview create web 8080 --auth public
+```
+
 ```shell cURL
 curl -s -X POST "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/previews" \
   -H "Authorization: Bearer $BONYA_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"port": 8080, "auth_mode": "public"}'
-```
-
-```shell CLI
-bonya preview create $SANDBOX_ID 8080 --auth public
-```
-
-```ts TypeScript
-import { PreviewAuth } from "@bonya-ai/bonya";
-
-const publicPreview = await sandbox.createPreview(8080, { auth: PreviewAuth.PUBLIC });
-```
-
-```python Python
-public = sandbox.create_preview(8080, auth=PreviewAuth.PUBLIC)
+  -d '{"port": 8080, "auth": "public"}'
 ```
 </CodeGroup>
 
-The CLI marks public preview URLs in its output as a reminder of what you just did.
+## 4. Grants and cleanup
 
-## The token-mode browser exchange
+Mint, renew or revoke grants on a private preview without recreating it:
 
-In `token` mode, a browser needs to trade the `capability_jws` for a session cookie once before it can view the preview. At a high level: navigate to `preview.url` with `?bonya_token=<capability_jws>` appended, and Roxy (the preview proxy) validates the token, sets a host-scoped `Secure`/`HttpOnly` cookie, and redirects to the same URL with the token stripped — before any guest content renders. See [Previews](/concepts/previews#the-token-mode-browser-exchange) for the exact mechanics.
-
-You don't have to build that URL by hand — the TypeScript, Python, and Go SDKs each expose a helper that does it for you:
-
-<CodeGroup>
-```ts TypeScript
-const browserUrl = sandbox.previewBrowserUrl(preview);
-// open browserUrl in a browser — one-time entry point
+```shell
+curl -s -X POST "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/previews/$PREVIEW_ID/grants" \
+  -H "Authorization: Bearer $BONYA_API_KEY" -H "Content-Type: application/json" \
+  -d '{"ttl_seconds": 600}'
 ```
 
-```python Python
-browser_url = sandbox.preview_browser_url(preview)
-```
-
-```go Go
-browserURL := sandbox.PreviewBrowserURL(preview)
-```
-</CodeGroup>
-
-This throws/raises/errors if called on a public preview, since there's no token to exchange.
-
-<Warning>
-Don't store `capability_jws` in a URL, log, or anywhere durable beyond the single navigation described above — it's a bearer credential for the preview.
-</Warning>
-
-## List and delete
-
-<CodeGroup>
-```shell cURL
-curl -s "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/previews" \
-  -H "Authorization: Bearer $BONYA_API_KEY"
-
-curl -s -X DELETE "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/previews/$PREVIEW_ID" \
-  -H "Authorization: Bearer $BONYA_API_KEY"
-```
-
-```shell CLI
-bonya preview list $SANDBOX_ID
-bonya preview delete $SANDBOX_ID $PREVIEW_ID
-```
-
-```ts TypeScript
-await sandbox.listPreviews();
-await sandbox.deletePreview(preview.id);
-```
-
-```python Python
-sandbox.list_previews()
-sandbox.delete_preview(preview.id)
-```
-</CodeGroup>
-
-List never includes `capability_jws` — only create does. Delete is idempotent and deliberately doesn't distinguish "already deleted" from "belongs to another organization," so it always returns `204`.
-
-## Related
-
-<CardGroup cols={2}>
-  <Card title="Previews" icon="link" href="/concepts/previews" />
-  <Card title="Sandboxes" icon="box" href="/concepts/sandboxes" />
-</CardGroup>
+List and delete previews with `bonya preview list|delete`, `GET .../previews`, and `DELETE .../previews/{preview_id}`. Deleting a preview ends access immediately.

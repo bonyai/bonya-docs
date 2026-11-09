@@ -12,142 +12,94 @@ A **preview** exposes a port inside a sandbox as an HTTPS URL, so you can view a
 curl -s -X POST "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/previews" \
   -H "Authorization: Bearer $BONYA_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"port": 3000, "name": "web"}'
+  -d '{"port": 3000}'
 ```
 
 ```shell CLI
-bonya preview create $SANDBOX_ID 3000 --name web
+bonya preview create web 3000
 ```
 
 ```ts TypeScript
-const preview = await sandbox.createPreview(3000, { name: "web" });
+const preview = await sandbox.createPreview(3000);
 console.log(preview.url);
 ```
 
 ```python Python
-preview = sandbox.create_preview(3000, name="web")
+preview = sandbox.create_preview(3000)
 print(preview.url)
 ```
 
 ```go Go
-preview, err := sandbox.CreatePreview(ctx, 3000, bonya.CreatePreviewOptions{Name: "web"})
+preview, err := sandbox.CreatePreview(ctx, 3000, bonya.PreviewOptions{})
 fmt.Println(preview.URL)
 ```
 </CodeGroup>
 
-**MCP:** the `preview_create` tool exposes this, with `capability_jws` deliberately dropped from the result — see below.
+**MCP:** `preview_create`.
 
-Request body (`PreviewCreateRequest`):
+Request body:
 
 <ParamField body="port" type="integer" required>
-  Port to expose, 1024–65535.
+  Port to expose, 1024–65535. Privileged ports are never previewable.
 </ParamField>
-<ParamField body="auth_mode" type="string" default="token">
-  `token` or `public` (see below).
+<ParamField body="auth" type="string" default="private">
+  `private` or `public` (see below).
 </ParamField>
-<ParamField body="name" type="string">
-  Display metadata only, at most 80 UTF-8 bytes.
+<ParamField body="ttl_seconds" type="integer">
+  Lifetime of the first grant on a private preview.
 </ParamField>
 
-Create also accepts an `Idempotency-Key` header — see [Idempotency](/concepts/idempotency).
+Create also accepts an `Idempotency-Key` header. See [Idempotency](/concepts/idempotency).
 
-Returns `201` with `PreviewCreateResponse`:
+Returns `201` with the preview:
 
-<ResponseField name="preview" type="object" required>
-  The created `Preview` (see fields below).
-</ResponseField>
-<ResponseField name="capability_jws" type="string" required>
-  A capability token for the token-mode browser exchange described below.
-</ResponseField>
+```json
+{
+  "id": "pv-cgl24jcazom7pdd4dzu5dsc2oe",
+  "sandbox_id": "sb-rcn9pz5ej2rnhi",
+  "port": 3000,
+  "auth": "private",
+  "url": "https://pv-cgl24jcazom7pdd4dzu5dsc2oe.tv.bonya.ai",
+  "created_by_user_id": "usr-f5q6bpaml50q81",
+  "created_at": "2026-11-09T23:03:21.471086Z",
+  "grant": {
+    "id": "pvg-mduwb73q6a5zogugmbeca3nrku",
+    "expires_at": "2026-11-10T00:03:21.471086Z",
+    "token": "bpv_...",
+    "exchange_url": "https://pv-....tv.bonya.ai/?bonya_token=bpv_..."
+  }
+}
+```
 
 <Warning>
-`capability_jws` is returned **only by create** — it is never included in the list response. Store it if you need the token-mode exchange; there's no way to retrieve it again later. This is a deliberate security property, not an oversight.
+The grant's `token` and `exchange_url` are returned **only** by the call that creates the grant. List and get never include them, and they can't be retrieved again. Anyone holding them can open the preview, so treat them as secrets. If you lose one, create a new grant.
 </Warning>
-
-### Preview fields
-
-<ResponseField name="preview_id" type="string" required>
-  Matches `^pv-[a-z2-7]{26}$`.
-</ResponseField>
-<ResponseField name="sandbox_id" type="string" required>
-  The owning sandbox.
-</ResponseField>
-<ResponseField name="port" type="integer" required>
-  The exposed port, 1024–65535.
-</ResponseField>
-<ResponseField name="auth_mode" type="string" required>
-  `token` or `public`.
-</ResponseField>
-<ResponseField name="name" type="string">
-  Display metadata only, at most 80 UTF-8 bytes.
-</ResponseField>
-<ResponseField name="url" type="string" required>
-  Token-free base preview URL.
-</ResponseField>
-<ResponseField name="created_at_unix_nanos" type="integer" required>
-  Creation time.
-</ResponseField>
 
 ## Auth modes
 
-`auth_mode` is one of two values — not `private`/`public`:
+- **`private`** (default) — only holders of a *grant* can open the preview. Members of your organization are not let in automatically.
+- **`public`** — anyone with the URL can open it, with no credential at all. Public is only ever explicit: omitting `auth` never yields a public URL.
 
-- **`token`** (default) — access is gated by the Roxy browser exchange described below.
-- **`public`** — anyone with the URL can view it; no exchange required.
+### Opening a private preview
 
-### The token-mode browser exchange
+Navigate once to the grant's `exchange_url`. The preview gateway validates the token, swaps it for a host-scoped `HttpOnly` cookie, and redirects to the same address without the token. Open it once and let the cookie carry the session. Don't share the URL.
 
-In `token` mode, the client navigates once to `preview.url` with `?bonya_token=<capability_jws>` appended. Roxy (the preview proxy) validates the token, sets a host-scoped `Secure`, `HttpOnly` cookie, and redirects to the same URL with `bonya_token` stripped — before any guest content is rendered. After that one exchange, the cookie carries the session; the token itself should not be stored in URLs or logs beyond that single navigation.
+The SDKs expose `previewBrowserUrl` / `preview_browser_url`, which builds this URL from a preview and its grant. The CLI prints it as `OPEN` when you run `bonya preview create`.
 
-Each SDK wraps this exchange in a `previewBrowserUrl`-style helper, which builds the one-time URL from the `capability_jws` returned by create. There's no cURL or CLI example for this step — it's a browser navigation, not a request/response call — and no MCP tool, since `preview_create`'s MCP result deliberately omits `capability_jws` in the first place.
+## Grants
 
-<CodeGroup>
-```ts TypeScript
-const url = sandbox.previewBrowserUrl(preview);
-// open `url` in a browser
-```
+A grant is a time-limited credential for a private preview. Manage grants under `/v1/sandbox/{sandbox_id}/previews/{preview_id}/grants`:
 
-```python Python
-import webbrowser
-webbrowser.open(sandbox.preview_browser_url(preview))
-```
+| Operation | Endpoint | SDK | MCP |
+| --- | --- | --- | --- |
+| Create | `POST .../grants` with `{ "ttl_seconds": 600 }` | `createPreviewGrant` | `preview_grant_create` |
+| List | `GET .../grants` | `listPreviewGrants` | `preview_grant_list` |
+| Renew | `POST .../grants/{grant_id}/renew` | `renewPreviewGrant` | `preview_grant_renew` |
+| Revoke | `POST .../grants/{grant_id}/revoke` | `revokePreviewGrant` | `preview_grant_revoke` |
 
-```go Go
-url, err := sandbox.PreviewBrowserURL(preview)
-// open url in a browser
-```
-</CodeGroup>
+## Listing and getting
 
-Open it once and let the cookie carry the session — the URL itself should not be shared, since anyone who receives it holds the sandbox's data-plane capability until it expires. It throws/raises/errors (per SDK) on a public preview, which has no token to exchange.
-
-## Listing previews
-
-<CodeGroup>
-```shell cURL
-curl -s "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/previews" \
-  -H "Authorization: Bearer $BONYA_API_KEY"
-```
-
-```shell CLI
-bonya preview list $SANDBOX_ID
-```
-
-```ts TypeScript
-await sandbox.listPreviews();
-```
-
-```python Python
-sandbox.list_previews()
-```
-
-```go Go
-previews, err := sandbox.ListPreviews(ctx)
-```
-</CodeGroup>
-
-**MCP:** the `preview_list` tool covers this.
-
-Returns `PreviewListResponse`: `{ "previews": [ ...Preview ] }`. As noted above, list **never** includes `capability_jws` — only create does.
+`GET /v1/sandbox/{sandbox_id}/previews` returns `{ "previews": [...] }`, and `GET .../previews/{preview_id}` returns one. **MCP:** `preview_list`, `preview_get`.
 
 ## Deleting a preview
 
@@ -158,7 +110,7 @@ curl -s -X DELETE "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/previews/$PREVIEW
 ```
 
 ```shell CLI
-bonya preview delete $SANDBOX_ID $PREVIEW_ID
+bonya preview delete web $PREVIEW_ID
 ```
 
 ```ts TypeScript
@@ -174,13 +126,7 @@ err = sandbox.DeletePreview(ctx, preview.ID)
 ```
 </CodeGroup>
 
-**MCP:** the `preview_delete` tool covers this, and is likewise idempotent.
-
-<Note>
-Delete is idempotent and deliberately avoids leaking cross-org existence — deleting a preview that doesn't exist (or belongs to another organization) behaves the same as deleting one that does, rather than distinguishing the two cases.
-</Note>
-
-Returns `204` on success.
+Delete returns `200` with the preview, which now has a `deleted_at`. **MCP:** `preview_delete`.
 
 ## Related
 

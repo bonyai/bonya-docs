@@ -30,7 +30,7 @@ Authorization: Bearer <token>
 
 ### What needs which
 
-Sandbox, session, exec, file, and preview operations accept a `personalApiKey`. Organization administration (listing/creating/renaming organizations, managing members), invitations, and API-key management are **JWT-only** — they explicitly refuse personal API keys, because they're dashboard-facing operations where a signed-in browser session is doing the asking, not an automated client.
+Sandbox, session, exec, file, and preview operations accept a `personalApiKey`. Organization administration (creating/renaming organizations, managing members; a key can only *list* the organizations it belongs to), invitations, and API-key management are **JWT-only** — they explicitly refuse personal API keys, because they're dashboard-facing operations where a signed-in browser session is doing the asking, not an automated client.
 
 Device-login's mint and poll steps (below) are unauthenticated entirely — the token they hand you *is* the credential at that point, there's nothing to bear a bearer token for yet.
 
@@ -53,6 +53,8 @@ The CLI and SDKs read these environment variables:
 | Variable | Purpose |
 | --- | --- |
 | `BONYA_API_KEY` | The personal API key to authenticate with. |
+| `BONYA_ENDPOINT` | API base URL. Defaults to `https://api.bonya.ai`. |
+| `BONYA_EDGE_ENDPOINT` | Host for exec, files and sessions (SDKs). Defaults to the API endpoint. |
 | `BONYA_CA_BUNDLE` | Path to a CA bundle, for custom TLS trust roots. |
 | `BONYA_ORGANIZATION_ID` | Default value sent as `X-Bonya-Organization-ID` on every request. |
 

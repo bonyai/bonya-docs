@@ -5,7 +5,7 @@ description: Welcome to the Bonya documentation
 
 Bonya gives you sandboxed, remote compute environments — called **sandboxes** — that you can create, run commands in, transfer files to and from, and expose ports from.
 
-Every sandbox is a full Linux VM you control over a REST API: create it from a template, run commands with buffered exec, a live TTY, or a named managed session, upload and download files over its filesystem API, and publish a running port as an HTTPS preview URL. Sandboxes suspend automatically when idle and resume on demand — there's no explicit start, stop, or wake to manage.
+Every sandbox is a full Linux VM you control over a REST API: create it, run commands with buffered exec, a live TTY, or a named managed session, upload and download files over its filesystem API, and publish a running port as an HTTPS preview URL. Idle sandboxes pause automatically and wake on demand, and you can pause, keep awake, snapshot, fork and restrict the network of a sandbox explicitly. GPU sandboxes, saved templates, secrets and scheduled jobs are covered too.
 
 You can talk to Bonya directly over HTTPS, through the TypeScript, Python, or Go SDK, from the `bonya` CLI, or from any MCP-compatible client (Claude Desktop, Claude Code, Cursor, …) using the Bonya MCP server.
 

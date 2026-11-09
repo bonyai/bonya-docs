@@ -1,730 +1,260 @@
 ---
 title: Usage
-description: Sandboxes, exec, sessions, files, previews, snapshots, jobs, and templates from Go
+description: Sandboxes, exec, sessions, files, previews, snapshots, forks, jobs, and organizations from Go
 ---
+
+Every call takes a `context.Context` first and returns an `*Error` on failure (see [Errors](#errors)).
 
 ## What you can do
 
 | I want to… | Call |
 |---|---|
-| Start a sandbox | `client.CreateSandbox(ctx, template)` |
-| Reconnect to one | `client.GetSandbox(ctx, id)` / `.GetSandboxByName(ctx, name)` |
-| Find my sandboxes | `client.ListSandboxes(ctx)` |
-| Run a command | `sandbox.Exec(ctx, cmd)` |
-| Stream output live | `sandbox.ExecStream(ctx, cmd)` |
-| Keep a process running after I disconnect | `sandbox.CreateSession(ctx, name, cmd)` |
-| Move files in and out | `sandbox.ReadFile`/`.WriteFile`/`.UploadFile`/`.DownloadFile` |
-| Expose a port to the web | `sandbox.CreatePreview(ctx, port)` |
-| Capture disk state | `sandbox.Snapshot(ctx)` |
-| Run a managed one-off or scheduled job | `client.RunJob(ctx, spec)` / `client.CreateJobSchedule(ctx, ...)` |
-| See what templates exist | `client.ListTemplates(ctx)` |
-
-Everything here is a **flat method** directly on `*Client` or `*Sandbox` —
-there is no `client.Sandboxes.Create(...)`-style namespace object to
-navigate. `client.CreateSandbox(ctx, template)`, `client.GetSandbox(ctx, id)`,
-`client.ListSandboxes(ctx)`, `client.DeleteSandbox(ctx, id)`,
-`client.ResumeSandbox(ctx, id)` are the whole sandbox-lifecycle surface on
-`*Client`. Once you're holding a `*Sandbox`, `sandbox.CreateSession(...)`,
-`sandbox.CreatePreview(...)`, `sandbox.Snapshot(...)`, and the file methods
-below are flat methods on it directly.
-
-<Note>
-`*Client` also has session/preview convenience methods that take a sandbox id
-directly instead of a `*Sandbox` — `client.CreateSession(ctx, sandboxID,
-name, cmd)`, `client.ListSessions(ctx, sandboxID)`, `client.CreatePreview(ctx,
-sandboxID, port)`, and similar. Each does a `GetSandbox` first and then
-delegates, which is one extra round trip compared to already holding a
-`*Sandbox` handle. Prefer calling directly on `sandbox` when you have one in
-hand; reach for a client-level call only when all you have is an id.
-</Note>
+| Start a sandbox | `client.Create(ctx, bonya.CreateOptions{...})` |
+| Reconnect to one | `client.Get(ctx, id)` / `client.Sandbox(id)` |
+| Find my sandboxes | `client.List(ctx, opts)` / `client.ListAll(ctx, opts)` |
+| Run a command | `sandbox.Exec(ctx, "ls", "-la")` / `sandbox.ExecWithOptions(ctx, opts)` |
+| Stream output live | `sandbox.ExecStream(ctx, opts)` |
+| Keep a process running after I disconnect | `sandbox.CreateSession(ctx, opts)` / `sandbox.AttachSession(ctx, name, opts)` |
+| Move files in and out | `ReadFile` / `WriteFile` / `Upload` / `Download` / `ListDir` / `Stat` / `Mkdir` / `Remove` / `RemoveAll` / `Rename` |
+| Expose a port to the web | `sandbox.CreatePreview(ctx, port, opts)` |
+| Capture disk state | `sandbox.CreateSnapshot(ctx, opts)` / `sandbox.ListSnapshots(ctx)` |
+| Clone a running sandbox | `sandbox.Fork(ctx, bonya.ForkOptions{Count: 2})` |
+| Pause or keep awake | `sandbox.Pause(ctx, bonya.PauseWarm)` / `sandbox.Keepalive(ctx, d)` |
+| Run a managed or scheduled job | `client.RunJob(ctx, spec)` / `client.CreateJobSchedule(ctx, spec)` |
+| See templates | `client.ListTemplates(ctx)` |
+| Switch organization | `client.ListOrganizations(ctx)` / `bonya.WithOrganizationID(id)` |
 
 ## Create sandboxes
 
 ```go
-sandbox, err := client.CreateSandbox(ctx, "bonya-dev", bonya.CreateOptions{
-	Wait:           bonya.WaitReady,
+sandbox, err := client.Create(ctx, bonya.CreateOptions{
+	Name:           "scratch",
+	Image:          "python:3.12", // optional: a public OCI image
 	IdempotencyKey: "create-job-123",
 })
 ```
 
-`CreateSandbox(ctx, template, opts...)` returns a `*Sandbox`.
+| Field | Description |
+|---|---|
+| `Name` | Display name. Empty generates one. |
+| `Image` | A public container image reference (tag or digest). Cannot be combined with `Snapshot`. |
+| `Snapshot` | Restore from a snapshot id. The new sandbox boots the snapshot's files with fresh processes. |
+| `IdempotencyKey` | Makes the create safe to repeat. Generated and reused across retries if empty. |
 
-| Field | Type | Description |
-|---|---|---|
-| `template` (positional) | `string` | May be empty to use the deployment's configured default template, if it has one. |
-| `CreateOptions.Version` | `string` | Template version. Server default when empty. |
-| `CreateOptions.Wait` | `Wait` | Defaults to `WaitReady`. |
-| `CreateOptions.IdempotencyKey` | `string` | Generated and reused for transport retries if empty. |
-| `CreateOptions.Name` | `string` | Optional display name, at most 80 bytes. Server generates a friendly one when empty. Names are not unique. |
+`Create` returns once the sandbox is running. A sandbox that failed to start comes back as an `ErrUnavailable` error; retry with a new key.
 
-`WaitReady` asks the service to return a running sandbox —
-`LastObservedStatus == StatusRunning`. `WaitNone` returns as soon as the
-service accepts the request — `LastObservedStatus == StatusCreating`.
-
-If create exhausts its deadline, the SDK returns a
-`*SandboxCreationTimeoutError`, carrying the `IdempotencyKey` used so you
-can retry the same creation rather than starting a second sandbox.
-
-Sandbox fields: `sandbox.ID`, `.OperationID`, `.Template`, `.Version`,
-`.LastObservedStatus`.
-
-## Get, list, and get by name
+## Get, list, refresh, delete
 
 ```go
-sandbox, err := client.GetSandbox(ctx, "sbx_123")
+sandbox, err := client.Get(ctx, "sb-abc123")
 
-summaries, err := client.ListSandboxes(ctx, bonya.ListOptions{
-	States: []bonya.Status{bonya.StatusRunning, bonya.StatusSuspended},
-	Limit:  20,
+for sb, err := range client.ListAll(ctx, bonya.ListOptions{States: []bonya.State{bonya.StateRunning, bonya.StateWarm}}) {
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(sb.ID, sb.State)
+}
+
+_ = sandbox.Refresh(ctx)
+_ = sandbox.Delete(ctx)
+```
+
+`sandbox.State` is one of `creating`, `running`, `cooling`, `warm`, `cold`, `waking`, `failed`, `deleting`, `deleted` or `lost`.
+
+## Run commands
+
+```go
+result, err := sandbox.ExecWithOptions(ctx, bonya.ExecOptions{
+	Command:    []string{"bash", "-lc", "uname -a"},
+	WorkingDir: "/root",
+	Env:        map[string]string{"FOO": "bar"},
+	Timeout:    30 * time.Second,
 })
-for _, summary := range summaries {
-	fmt.Println(summary.ID, summary.LastObservedStatus)
-}
-
-byName, err := client.GetSandboxByName(ctx, "web-server")
+fmt.Println(result.ExitCode, result.Stdout, result.Stderr)
 ```
 
-`GetSandbox(ctx, sandboxID)` requires a non-empty id and returns a usable
-`*Sandbox` handle. It does **not** explicitly resume the sandbox — exec
-and filesystem calls are what wake a suspended one.
-
-<Note>
-Unlike the TypeScript and Python SDKs, Go's `ListSandboxes` returns a plain
-`[]SandboxSummary` slice, not a lazy iterator — Go has no generator
-protocol as natural as Python's iterators or JS's async iterables, so the
-Go SDK exposes a single "collect all matching, up to `Limit`" call and
-pages internally. `ListOptions.Limit` bounds how much work `ListSandboxes`
-does; `Limit: 0` (the default) fetches every matching sandbox.
-</Note>
-
-`ListOptions.Name` filters to sandboxes carrying an exact display name
-(names aren't unique, so this can still match more than one). Valid
-`States` filters are `StatusCreating`, `StatusRunning`,
-`StatusSuspending`, `StatusSuspended`, `StatusResuming`, and
-`StatusFailed` — `StatusDeleted` is not a valid filter. A `SandboxSummary`
-has `ID`, `OperationID`, `Template`, `Version`, `LastObservedStatus`,
-`FailureCode`, `FailureMessage` — it cannot run Exec; call
-`GetSandbox(ctx, summary.ID)` first.
-
-`GetSandboxByName(ctx, name)` resolves a display name to a single sandbox.
-Names are not unique: if more than one sandbox carries the name, it returns
-an error rather than picking one (a later `Delete` could otherwise destroy
-the wrong sandbox) — use `ListSandboxes` with `ListOptions{Name: ...}` and
-decide yourself, which is what the `bonya` CLI does when it prompts.
-
-## Delete and cleanup
-
-```go
-result, err := sandbox.Delete(ctx)
-fmt.Println(result.SandboxID, result.AlreadyDeleted)
-```
-
-`sandbox.Delete(ctx)` returns `*DeleteResult{SandboxID, AlreadyDeleted}`.
-Calling it again on the same `*Sandbox` is local and idempotent — no
-second RPC.
-
-```go
-sandbox, err := client.CreateSandbox(ctx, "bonya-dev")
-if err != nil {
-	log.Fatal(err)
-}
-defer sandbox.Delete(ctx)
-```
-
-## Resume
-
-```go
-resume, err := sandbox.Resume(ctx, bonya.ResumeOptions{IdempotencyKey: "resume-job-123"})
-fmt.Println(resume.SandboxID, resume.LifecycleOperationID, resume.AlreadyRunning)
-```
-
-`sandbox.Resume(ctx, opts...)` returns `*ResumeResult` and updates the
-sandbox's private exec endpoint/capability, setting `LastObservedStatus`
-to `StatusRunning`. `Resume` on a failed sandbox returns a
-`*SandboxFailedError` locally, before any RPC.
-
-Explicit resume is different from automatic wake: `GetSandbox` never calls
-`Resume`, and ordinary exec/filesystem calls don't make a public
-`ResumeSandbox` RPC — they hit the sandbox's guest endpoint directly, and
-the service may wake it behind that route.
-
-## Exec vs ExecStream
-
-`Exec` buffers output and returns once the process exits — good for
-short, bounded commands. `ExecStream` yields events as they happen — use
-it for large output, long-running commands, interactive stdin, or
-cancellation. Both are one-shot: the remote process ends when the call (or
-stream) ends. This is different from [managed sessions](#managed-console-sessions),
-which keep running after you disconnect.
-
-### Buffered exec
-
-```go
-result, err := sandbox.Exec(ctx, []string{"python3", "-c", "import os; print(os.environ['MODE'])"}, bonya.ExecOptions{
-	Env:     map[string]string{"MODE": "development"},
-	Cwd:     "/workspace",
-	Timeout: 10 * time.Second,
-})
-
-fmt.Println(result.Stdout(), result.Stderr(), result.ExitCode, result.OK())
-```
-
-```go
-func (s *Sandbox) Exec(ctx context.Context, command any, opts ...ExecOptions) (*ExecResult, error)
-```
-
-`command` accepts either a `string` (run as `["/bin/sh", "-c", command]`)
-or a `[]string` (run directly; must be non-empty with no empty entries).
-
-```go
-type ExecOptions struct {
-	Env     map[string]string
-	Cwd     string
-	TTY     bool
-	Cols    int
-	Rows    int
-	Timeout time.Duration
-	Check   bool  // calls ExecResult.Check before Exec returns; ignored by ExecStream
-	Input   []byte // written to stdin, then half-closed; requires TTY: false; ignored by ExecStream
-}
-```
-
-`Env` overlays string env vars (keys can't contain `=` or NUL). `Cwd` sets
-the remote working directory.
-
-`*ExecResult` exposes `StdoutBytes`/`StderrBytes` (`[]byte`),
-`Stdout()`/`Stderr()` (UTF-8 with replacement for invalid bytes),
-`ExitCode`, `Signaled`, `Signal`, `OK()` (`ExitCode == 0 && !Signaled`),
-and `String()` (same as `Stdout()`).
-
-`ExecOptions.Check: true` calls `result.Check()` before returning; on a
-non-ok result, `Exec` returns `*ExecFailedError`, with the original result
-at `error.Result`:
-
-```go
-result, err := sandbox.Exec(ctx, []string{"false"}, bonya.ExecOptions{Check: true})
-var execErr *bonya.ExecFailedError
-if errors.As(err, &execErr) {
-	fmt.Println(execErr.Result.ExitCode)
-}
-```
-
-`Exec` buffers stdout and stderr in client memory. Use `ExecStream` for
-large output, long-running commands, interactive stdin, or cancellation.
+Without a stream, a zero `Timeout` means the service default of 60 seconds, capped at 10 minutes. Output is capped at 4 MiB per stream, with `StdoutTruncated` and `StderrTruncated` reporting overflow.
 
 ### Streaming exec
 
 ```go
-session, err := sandbox.ExecStream(ctx, []string{"bash", "-lc", "echo out; echo err >&2"})
+stream, err := sandbox.ExecStream(ctx, bonya.ExecOptions{
+	Command: []string{"bash", "-lc", "echo out; echo err >&2"},
+	Stdout:  os.Stdout,
+	Stderr:  os.Stderr,
+})
 if err != nil {
 	log.Fatal(err)
 }
-defer session.Close()
+defer stream.Close()
 
-for {
-	event, err := session.Next()
-	if err != nil {
-		log.Fatal(err)
-	}
-	if event == nil {
-		break // stream ended cleanly after Exit
-	}
-	switch e := event.(type) {
-	case bonya.Stdout:
-		fmt.Print("stdout: ", string(e.Data))
-	case bonya.Stderr:
-		fmt.Print("stderr: ", string(e.Data))
-	case bonya.Exit:
-		fmt.Println("exit:", e.ExitCode)
-	}
-}
+status, err := stream.Wait()
+fmt.Println("exit:", status.ExitCode)
 ```
+
+Write stdin with `stream.Write`, close it with `stream.CloseStdin()`, and stop the command with `stream.Cancel()`. Set `TTY: true` with `Cols` and `Rows` to run in a terminal. On a stream, `Timeout` stops the command in the sandbox even if your connection breaks (`ExitStatus.TimedOut`).
+
+Each run has an `IdempotencyKey`. Running again with the same key attaches to the first process instead of starting another, which is how you recover after an `ErrOutcomeUnknown`. `AttachOnly` watches or cancels a run whose stream broke.
+
+The process dies when the stream closes. For anything that must outlive your connection, use a session.
+
+## Persistent sessions
 
 ```go
-func (s *Sandbox) ExecStream(ctx context.Context, command any, opts ...ExecOptions) (*ExecSession, error)
+_, err := sandbox.CreateSession(ctx, bonya.SessionOptions{
+	Name:    "server",
+	Command: []string{"bash"},
+	Cols:    120,
+	Rows:    40,
+})
+
+att, err := sandbox.AttachSession(ctx, "server", bonya.AttachOptions{Output: os.Stdout})
+att.Write([]byte("npm run dev\n"))
+// ... later
+att.Detach() // the process keeps running
+
+sessions, _ := sandbox.ListSessions(ctx)
+_, _ = sandbox.KillSession(ctx, "server", bonya.KillSessionOptions{})
 ```
 
-`command`, `Env`, `Cwd`, `TTY`, `Cols`, `Rows`, and `Timeout` follow the
-same rules as buffered Exec. Call `session.Next()` repeatedly to receive
-`Stdout`, `Stderr`, and `Exit` events until it returns `(nil, nil)`.
-
-Write stdin with `session.Write(data []byte)` — returns
-`*InvalidRequestError` after the session or stdin is closed.
-`session.CloseStdin()` is idempotent. `session.Cancel()` is idempotent and
-sends a cancel frame when possible. `session.Close()` cancels an
-unfinished session — call it via `defer`. Internally the SDK uses a
-background reader goroutine feeding a buffered event channel per WebSocket
-connection. If `Next`
-reaches the session deadline before the next event, the SDK cancels the
-remote exec and returns `*TimeoutError`.
-
-### TTY exec
-
-Set `TTY: true` for terminal semantics — stdout and stderr share the
-terminal stream, so the SDK returns terminal output as `Stdout()` and
-leaves `Stderr()` empty. Default dimensions are 80x24 (sent on the wire as
-`cols=0, rows=0`). Provide both `Cols` and `Rows` together to override —
-each must be an integer from 1 through 512, and both require `TTY: true`.
-Buffered `Input` isn't allowed with `TTY: true`; use `ExecStream` and
-`session.Write(...)` instead. Resize an active TTY stream with
-`session.Resize(cols, rows)`.
-
-## Managed console sessions
-
-`CreateSession`, `ListSessions`, `KillSession`, and `AttachSession` are
-flat methods directly on `*Sandbox` for named, persistent command sessions
-that **outlive the client connection**. This is the key distinction from
-`ExecStream`: an exec process dies when its stream closes, but a managed
-session keeps running detached, and you can reattach later — even after
-the sandbox warm-suspends and resumes — and replay what it produced while
-nobody was watching. Use `Exec`/`ExecStream` for one-shot commands; use
-managed sessions for long-lived terminals like dev servers you want to
-detach from and come back to.
-
-```go
-info, err := sandbox.CreateSession(ctx, "server", []string{"bash"}, bonya.CreateSessionOptions{Cols: 120, Rows: 40})
-
-stream, err := sandbox.AttachSession(ctx, "server")
-stream.Write([]byte("npm run dev\n"))
-stream.Resize(140, 45)
-for {
-	event, err := stream.Next()
-	if err != nil || event == nil {
-		break
-	}
-}
-stream.Detach()
-
-result, err := sandbox.ListSessions(ctx)
-for _, info := range result.Sessions {
-	fmt.Println(info.Name, info.Status)
-}
-
-sandbox.KillSession(ctx, "server")
-```
-
-**Create**
-
-```go
-func (s *Sandbox) CreateSession(ctx context.Context, name string, command []string, opts ...CreateSessionOptions) (SessionInfo, error)
-```
-
-`name` must match `^[a-z][a-z0-9-]{0,31}$`. `command` is a non-empty slice
-of non-empty strings (no shell-string convenience like `Exec`).
-`CreateSessionOptions` has `Env`, `Cwd`, `Cols`, `Rows`, and `Replace`.
-Creating over an existing record returns `*SessionExistsError` unless
-`Replace: true` — and even then, only a terminal record
-(exited/killed/failed) is replaced; a running or attached session is
-never replaced.
-
-**List** — `ListSessions(ctx)` returns `SessionList{Sessions
-[]SessionInfo, SandboxSuspended bool}`. Listing works on a suspended
-sandbox without waking it.
-
-**Attach** — `AttachSession(ctx, name, opts...)` with
-`AttachOptions{Cols, Rows, MaxReplayBytes}` returns `*SessionStream`.
-`stream.Info`, `.ReplayedBytes`, `.HistoryDropped` describe the bounded
-replay from while you were detached (the replay ring is 1 MiB). Attaching
-preempts any other attached client — the loser gets
-`SessionEnded{Reason: SessionEndedReasonTakeover}`. Attaching to a
-suspended sandbox's session wakes it.
-
-`stream.Next()` yields: `Stdout{Data []byte}` (merged output — sessions
-are TTY-only, no separate stderr), `Exit{ExitCode, Signaled, Signal}`,
-`SessionEnded{Reason}` (`SessionEndedReasonDetached` or
-`SessionEndedReasonTakeover`), `SessionOutputDropped{DroppedBytes}`
-(client reading too slowly; doesn't end the attach).
-
-`stream.Write(data)`, `stream.Resize(cols, rows)` (1–512 per dimension),
-`stream.Detach()` (ends gracefully, process keeps running),
-`stream.Close()` (calls `Detach` if still open — call it via `defer`).
-
-**Kill** — `KillSession(ctx, name, opts...)` with
-`KillOptions{Signal, GraceMS}` signals the process group (`Signal`
-defaults to `"TERM"`), escalating to `SIGKILL` after `GraceMS` (defaults
-to 5000 when 0) if it hasn't exited. Returns `SessionInfo`, but exit info
-isn't guaranteed on that response — `Kill` doesn't wait for the guest to
-reap the process, so a `ListSessions` shortly after is the reliable way to
-see the final exit code. Killing an unknown name returns
-`*SessionNotFoundError`.
-
-`SessionInfo`: `Name`, `Command` (`[]string`), `WorkingDir`, `Status`,
-`Attached`, `StartedAt`, `LastActivityAt`, `EndedAt` (zero value while
-running), `Exit` (non-nil only once terminal). `SessionStatus` values:
-`SessionStatusUnspecified`, `SessionStatusStarting`, `SessionStatusIdle`,
-`SessionStatusAttached`, `SessionStatusExited`, `SessionStatusKilled`,
-`SessionStatusFailed`.
-
-A session's process never blocks idle suspend by itself — only an
-*attached* stream does. A quiet, detached session lets the sandbox
-warm-suspend and survives the resume with process and replay buffer
-intact.
-
-Session calls transparently reissue an expired capability and retry once,
-the same way `ExecStream` and the file methods below do. Call
-`sandbox.ReissueCapability(ctx)` directly only if you manage tokens
-yourself.
+Session names match `^[a-z][a-z0-9-]{0,31}$`. A session keeps running after you detach and replays recent output on attach (`Attachment.ReplayedBytes`, `HistoryDropped`). The attachment reconnects by itself after a pause or a lost connection unless `NoReconnect` is set. `Wait()` returns an `AttachResult` with `Exit`, `Detached` and `TakenOver`.
 
 ## Files
 
-File operations are flat methods directly on `*Sandbox`:
-
 ```go
-sandbox.WriteFile(ctx, "/workspace/message.txt", []byte("hello\n"))
-payload, err := sandbox.ReadFile(ctx, "/workspace/message.txt")
+_, err := sandbox.WriteFile(ctx, "/root/hello.txt", []byte("hello\n"))
+data, err := sandbox.ReadFile(ctx, "/root/hello.txt", 0)
 
-sandbox.UploadFile(ctx, "local-input.bin", "/workspace/input.bin")
-sandbox.DownloadFile(ctx, "/workspace/input.bin", "local-output.bin")
+err = sandbox.Mkdir(ctx, "/root/out")
+err = sandbox.Rename(ctx, "/root/hello.txt", "/root/out/hello.txt")
 
-entries, err := sandbox.ListFiles(ctx, "/workspace")
-info, err := sandbox.StatFile(ctx, "/workspace/message.txt")
+entries, err := sandbox.ListDir(ctx, "/root/out")
+info, err := sandbox.Stat(ctx, "/root/out/hello.txt")
 
-sandbox.MkdirFile(ctx, "/workspace/output")
-sandbox.MoveFile(ctx, "/workspace/message.txt", "/workspace/output/message.txt")
-sandbox.RemoveFile(ctx, "/workspace/output", true) // recursive
+_, err = sandbox.Upload(ctx, "./local.json", "/root/out/local.json")
+_, err = sandbox.Download(ctx, "/root/out/local.json", "./copy.json")
+err = sandbox.RemoveAll(ctx, "/root/out")
 ```
 
-| Method | Signature |
-|---|---|
-| `ReadFile` | `(ctx, path string) ([]byte, error)` |
-| `WriteFile` | `(ctx, path string, data []byte) error` |
-| `UploadFile` | `(ctx, localPath, remotePath string) error` |
-| `DownloadFile` | `(ctx, remotePath, localPath string) error` |
-| `ListFiles` | `(ctx, path string) ([]FileInfo, error)` |
-| `StatFile` | `(ctx, path string) (FileInfo, error)` |
-| `MkdirFile` | `(ctx, path string) error` |
-| `RemoveFile` | `(ctx, path string, recursive bool) error` |
-| `MoveFile` | `(ctx, source, destination string) error` |
+`OpenFile` returns an `io.ReadCloser` and `WriteFileFrom` takes an `io.Reader` for large files.
 
-`ReadFile` buffers the whole file and returns `*FilesystemLimitError` before
-exceeding the configured filesystem read limit. `WriteFile` streams in 64 KiB
-chunks through a guest-side temp file and publishes atomically; a symlink
-at the final path is not followed. `UploadFile`/`DownloadFile` stream in 64 KiB
-chunks; `DownloadFile` uses a temp file, fsync, and atomic `os.Rename`. `ListFiles`
-returns immediate children sorted by name, or an error — no partial
-results. `StatFile` returns lstat-style metadata (a final symlink is reported
-as a symlink, not followed). `MoveFile` is same-filesystem, atomic,
-no-overwrite — cross-filesystem returns `*CrossFilesystemMoveError`,
-existing destination returns `*RemoteFileExistsError`. `RemoveFile(ctx, path, true)`
-recurses without following symlinks and is not atomic.
-
-`FileInfo` fields: `Path`, `Name`, `Kind` (`FileKindFile` /
-`FileKindDirectory` / `FileKindSymlink` / `FileKindOther`), `Size`,
-`Mode`, `ModifiedAt` (`time.Time`).
-
-## Preview URLs
-
-A preview publishes one guest port at an HTTPS URL a browser can open. The
-server must bind a port in 1024–65535; privileged ports are never
-previewable.
+## Previews
 
 ```go
-preview, err := sandbox.CreatePreview(ctx, 3000, bonya.CreatePreviewOptions{Name: "web"})
-fmt.Println(preview.URL) // https://pv-<26 chars>.tv.bonya.ai
+preview, err := sandbox.CreatePreview(ctx, 3000, bonya.PreviewOptions{})
+fmt.Println(preview.URL)
 
-previews, err := sandbox.ListPreviews(ctx)
-err = sandbox.DeletePreview(ctx, preview.ID)
+// A private preview is opened with a one-time grant token.
+fmt.Println(preview.Grant.ExchangeURL)
+
+public, err := sandbox.CreatePreview(ctx, 8080, bonya.PreviewOptions{Auth: bonya.PreviewPublic})
+
+grant, err := preview.CreateGrant(ctx, 10*time.Minute)
+grants, err := preview.ListGrants(ctx)
+err = preview.Delete(ctx)
 ```
 
-A token-mode preview needs the sandbox's capability, and a URL isn't a
-safe place to leave one. `sandbox.PreviewBrowserURL(preview)` produces a
-single-use entry point: the gateway validates the token, trades it for a
-host-scoped `HttpOnly` cookie, and redirects without the token in the URL.
-It errors on a public preview, which has no token to exchange.
+Ports must be 1024–65535. `Auth` defaults to private, and public is only ever explicit. `Token` and `ExchangeURL` are set only on the grant as it was created; treat them as secrets.
+
+## Lifecycle, snapshots, and forks
 
 ```go
-public, err := sandbox.CreatePreview(ctx, 8080, bonya.CreatePreviewOptions{Auth: bonya.PreviewAuthPublic})
+err = sandbox.Pause(ctx, bonya.PauseWarm) // or bonya.PauseCold
+until, err := sandbox.Keepalive(ctx, 30*time.Minute) // also wakes a paused sandbox
+
+snap, err := sandbox.CreateSnapshot(ctx, bonya.SnapshotOptions{Name: "baseline"})
+restored, err := client.Create(ctx, bonya.CreateOptions{Snapshot: snap.ID})
+snaps, err := sandbox.ListSnapshots(ctx)
+err = client.DeleteSnapshot(ctx, snap.ID)
+
+fork, err := sandbox.Fork(ctx, bonya.ForkOptions{Count: 2})
+for _, child := range fork.Sandboxes {
+	fmt.Println(child.ID, child.State)
+}
 ```
 
-`PreviewAuthPublic` means anyone with the URL reaches the service, no
-credential — the only protection is the 26 random characters in the
-hostname. `PreviewAuthToken` is the default; an omitted `Auth` never
-yields a public URL.
-
-`CreatePreview` returns a fresh capability and the SDK stores it on the
-sandbox automatically (the preview scope is newer than a sandbox's
-original token). If you're holding a capability elsewhere, refresh it
-explicitly with `sandbox.ReissueCapability(ctx)`.
-
-Traffic to a preview URL wakes a suspended sandbox; the first request
-after suspend pays resume latency and may return `503` with `Retry-After`.
-
-## Snapshots
-
-```go
-snapshot, err := sandbox.Snapshot(ctx, bonya.SnapshotOptions{IdempotencyKey: "snapshot-job-123"})
-fmt.Println(snapshot.ID, snapshot.SourceSandboxID)
-
-snapshot.Delete(ctx)
-snapshot.Delete(ctx) // local no-op
-```
-
-`sandbox.Snapshot(ctx, opts...)` returns `*Snapshot`. If
-`SnapshotOptions.IdempotencyKey` is empty, the SDK generates and reuses
-one for transport retries; the same key against the same source sandbox
-returns the same snapshot identity on idempotent replay.
-
-Snapshot create requires a running source sandbox: a locally deleted or
-observed-deleted sandbox returns `*SandboxDeletedError`, a failed one
-returns `*SandboxFailedError`, a suspended one returns
-`*SandboxSuspendedError`.
-
-`snapshot.Delete(ctx)` returns `nil` and is idempotent on the same
-`*Snapshot`. A snapshot has its own identifier — you can delete it after
-deleting the sandbox that produced it.
+A sandbox paused explicitly is not woken by exec or preview traffic; wake it with `Keepalive`. Snapshot `Name` is required (at most 128 characters).
 
 ## Jobs
 
-A job is a managed run of a command or script — on a new sandbox (created
-and, by default, deleted for you) or an existing one. Jobs are how you run
-work without holding a `*Sandbox` handle open yourself for the duration.
-
 ```go
 run, err := client.RunJob(ctx, bonya.JobSpec{
-	NewSandbox: &bonya.JobSandboxSpec{Template: "bonya-dev"},
-	Cmd:        []string{"./run-tests.sh"},
+	NewSandbox:            &bonya.JobNewSandbox{},
+	Cmd:                   []string{"./run-tests.sh"},
+	CommandTimeoutSeconds: 600,
 })
-if err != nil {
-	log.Fatal(err)
-}
 fmt.Println(run.Status, run.Result.ExitCode)
 ```
 
-`RunJob` blocks until the run finishes, bounded by the client's own
-timeout — use it for short jobs. `StartJob` returns immediately with a
-run id instead:
+`RunJob` waits for the result; `StartJob` returns a run id immediately. Use `GetJobRun`, `ListJobRuns` / `ListAllJobRuns` and `CancelJobRun` to track runs.
+
+### Schedules
 
 ```go
-runID, alreadyRunning, err := client.StartJob(ctx, bonya.JobSpec{
-	ExistingSandboxID: "sbx-123",
-	Cmd:               []string{"./long-migration.sh"},
-})
-// ... later ...
-detail, err := client.GetJobRun(ctx, runID)
-fmt.Println(detail.Status, detail.Spec, detail.Timeline)
-```
-
-`JobSpec` requires exactly one of `ExistingSandboxID`/`NewSandbox`, and
-exactly one of `Cmd`/`Script`. `Disposition` (`bonya.DispositionDelete`,
-the default, or `bonya.DispositionKeep`) controls what happens to a
-sandbox the job itself created once the run ends; it's not meaningful for
-`ExistingSandboxID`.
-
-`GetJobRun` returns `*JobRunDetail`, which adds the stored `Spec` and an
-activity `Timeline` to the run summary `ListJobRuns` returns. There is no
-endpoint to edit a run in place: to "edit and rerun" one, fetch it with
-`GetJobRun`, change what you need on its `Spec`, and pass that to `RunJob`
-or `StartJob` as a new run.
-
-```go
-runs, err := client.ListJobRuns(ctx, bonya.ListJobRunsOptions{SandboxID: "sbx-123"})
-err = client.CancelJobRun(ctx, runID) // requests cancellation; cleanup still runs
-```
-
-`CancelJobRun` cancels rather than terminates, so the run's own cleanup
-(e.g. deleting a sandbox it created) still executes.
-
-## Job schedules
-
-A schedule wraps a `JobSpec` with timing — cron, interval, or a one-shot
-future time — so it runs without you calling `RunJob` yourself.
-
-```go
-schedule, err := client.CreateJobSchedule(ctx,
-	bonya.ScheduleSpec{IntervalSeconds: 3600},
-	bonya.JobSpec{
-		NewSandbox: &bonya.JobSandboxSpec{Template: "bonya-dev"},
-		Cmd:        []string{"./nightly-report.sh"},
+schedule, err := client.CreateJobSchedule(ctx, bonya.JobScheduleSpec{
+	CronExpressions: []string{"0 3 * * *"},
+	TimeZone:        "UTC",
+	Job: bonya.JobSpec{
+		NewSandbox: &bonya.JobNewSandbox{},
+		Cmd:        []string{"./nightly.sh"},
 	},
-)
-fmt.Println(schedule.ScheduleID, schedule.NextRunAtUnixNanos)
+})
+
+_, err = client.SetJobSchedulePaused(ctx, schedule.ID, true, "maintenance")
+err = client.TriggerJobSchedule(ctx, schedule.ID)
+err = client.DeleteJobSchedule(ctx, schedule.ID)
 ```
 
-`ScheduleSpec` requires exactly one of `CronExpressions`, `IntervalSeconds`,
-and `RunAtUnixNanos` (a one-shot: a single future calendar time, refused
-if in the past). `Overlap` (default `bonya.ScheduleOverlapSkip`) controls
-what a fire does when the previous run from the same schedule is still
-going.
-
-```go
-schedules, err := client.ListJobSchedules(ctx)
-schedule, err = client.GetJobSchedule(ctx, scheduleID)
-
-// UpdateJobSchedule replaces the whole schedule -- pass every field you
-// want to keep, not just the one you're changing.
-schedule, err = client.UpdateJobSchedule(ctx, scheduleID,
-	bonya.ScheduleSpec{IntervalSeconds: 7200}, jobSpec)
-
-schedule, err = client.SetJobSchedulePaused(ctx, scheduleID, true, "pausing for maintenance")
-err = client.TriggerJobSchedule(ctx, scheduleID) // fires one run now, ignoring timing
-err = client.DeleteJobSchedule(ctx, scheduleID)
-```
-
-`JobSchedule.RecentRunIDs` holds the last 10 fires' run ids (oldest first,
-including manual triggers), each a valid `GetJobRun` id — so you can
-follow a schedule straight to its recent runs without a separate
-`ListJobRuns` call.
+A schedule uses exactly one of `CronExpressions`, `IntervalSeconds` or `RunAt`.
 
 ## Templates
 
 ```go
 templates, err := client.ListTemplates(ctx)
-for _, template := range templates {
-	fmt.Println(template.ID, template.Version, template.IsDefault, template.Metadata.OS)
-}
 ```
 
-`ListTemplates` lists every `template_id`/version `CreateSandbox` and
-`RunJob` will accept, with metadata (OS, installed language stacks, which
-AI agent CLIs are preinstalled) to help pick one. Not paginated: the
-catalog is the same for every caller. `CreateSandbox`'s `template`
-argument may be empty to use the deployment's configured default
-template, if it has one.
+<Note>
+The Go SDK lists templates. To create or edit templates, secrets, secret sets and registry connections, use the [TypeScript](/sdks/typescript/usage) or [Python](/sdks/python/usage) SDK, the CLI, or the REST API.
+</Note>
 
 ## Organizations
 
-An API key belongs to a user, not a single organization, so one key works
-across every organization that user belongs to. Calls are scoped to
-whichever organization is current on the client.
-
 ```go
-organizations, err := client.ListOrganizations(ctx)
-for _, org := range organizations {
-	fmt.Println(org.ID, org.Name, org.Personal, org.Role)
-}
-
-err = client.SetOrganizationID(organizations[0].ID)
+orgs, err := client.ListOrganizations(ctx)
+client, err = bonya.NewClient(bonya.WithOrganizationID(orgs[0].ID))
 ```
 
-`ListOrganizations(ctx)` returns every organization the caller belongs to,
-including their personal organization. `Organization.Personal` marks that
-one — it's the deterministic tenant an omitted organization context
-resolves to, and every account has exactly one.
+The precedence is the option, then `BONYA_ORGANIZATION_ID`, then your personal organization.
 
-`SetOrganizationID(id)` changes which organization subsequent calls run
-against, including calls on a client that is already connected — it takes
-effect immediately, not just on the next dial. An empty id is rejected as
-an `*InvalidRequestError` rather than silently falling back to the
-personal organization. To set it once at construction instead, use
-`bonya.WithOrganizationID(id)`; `OrganizationID()` reads back whatever is
-currently in effect. See [Configuration](/sdks/go/installation#configure)
-for the full precedence and CI guidance.
+## Errors
 
-## Error handling
-
-All SDK errors embed `BaseError` and expose `Message()`, `SandboxID`,
-`OperationID`, `IdempotencyKey`. Use `errors.As` to match a specific type:
+Every failure is an `*bonya.Error` with a `Kind`, the service's stable `Code`, a `Message`, and the `SandboxID` and `RetryAfter` where they apply. Match on kind with `errors.Is`:
 
 ```go
-sandbox, err := client.GetSandbox(ctx, "sbx_missing")
-var notFound *bonya.SandboxNotFoundError
-if errors.As(err, &notFound) {
-	fmt.Println("sandbox does not exist or is not visible")
+_, err := client.Get(ctx, "sb-missing")
+switch {
+case errors.Is(err, bonya.ErrNotFound):
+	fmt.Println("gone")
+case errors.Is(err, bonya.ErrRateLimited):
+	var e *bonya.Error
+	errors.As(err, &e)
+	time.Sleep(e.RetryAfter)
 }
 ```
 
-| Error | Meaning |
+| Kind | Meaning |
 |---|---|
-| `*AuthenticationError` | Invalid or rejected API key. |
-| `*InvalidRequestError` | Invalid local arguments or invalid service response. |
-| `*SandboxNotFoundError` | Sandbox missing, deleted, or not visible to the key. |
-| `*SandboxDeletedError` | Operation can't run — sandbox is deleted. |
-| `*SandboxSuspendedError` | Operation reported a suspended sandbox. |
-| `*SandboxBusyError` | Service rejected a lifecycle operation as busy. |
-| `*SandboxFailedError` | Operation can't run — sandbox failed. |
-| `*SandboxCreationFailedError` | Create reached a failed terminal state. |
-| `*SandboxCreationTimeoutError` | Create deadline expired. |
-| `*CapabilityRejectedError` | Guest capability rejected and couldn't be refreshed. |
-| `*SessionExistsError` | `CreateSession` targeted a name with a non-replaceable record. |
-| `*SessionNotFoundError` | `AttachSession`/`KillSession` named a session that doesn't exist. |
-| `*JobRunNotFoundError` | `GetJobRun`/`CancelJobRun` named a run that doesn't exist. |
-| `*JobScheduleNotFoundError` | A job schedule call named a schedule that doesn't exist. |
-| `*FilesystemError` | General filesystem failure. |
-| `*RemoteFileNotFoundError` | Remote file or directory missing (embeds `FilesystemError`; `errors.As(err, &fsErr)` also matches). |
-| `*RemoteFileExistsError` | Remote destination already exists. |
-| `*CrossFilesystemMoveError` | Remote move crosses filesystems. |
-| `*FilesystemLimitError` | Client or service filesystem size/frame limit. |
-| `*ExecFailedError` | `ExecResult.Check()` or `ExecOptions.Check: true` saw a non-OK result; carries `Result *ExecResult`. |
-| `*TimeoutError` | Operation deadline expired. |
-| `*ConnectionError` | Retryable transport failure exhausted retries. |
-| `*ServiceError` | Service or unexpected transport failure not covered above. |
+| `ErrInvalidRequest` | The request was malformed. |
+| `ErrUnauthenticated` / `ErrPermissionDenied` | Bad credentials, or not allowed. |
+| `ErrNotFound` | The resource doesn't exist. |
+| `ErrConflict` | The resource is in a state that refuses the call. |
+| `ErrSandboxPaused` | The sandbox is paused. Wake it with `Keepalive`. |
+| `ErrSnapshotInUse` | The snapshot is still referenced. |
+| `ErrLimitReached` / `ErrRateLimited` / `ErrNoCapacity` | A quota, rate limit or capacity limit. |
+| `ErrTooLarge` | The payload exceeded a limit. |
+| `ErrTimeout` | The call timed out. |
+| `ErrUnavailable` | The service is unavailable. |
+| `ErrOutcomeUnknown` | The result is unknown; retry with the same idempotency key. |
+| `ErrInternal` | An unexpected server error. |
 
-The SDK redacts API keys, capabilities, and selected operation identifiers
-from mapped service error messages, and replaces path-like internal
-details similarly.
-
-### Retries and idempotency
-
-`WithMaxRetries` (default `2`) controls SDK retries for retryable
-control-plane operations. The SDK retries transient failures for create,
-get, list, delete, snapshot create, and snapshot delete, while
-preserving the same request and idempotency key where one exists. Exec
-calls are not retried, except for one capability refresh when the SDK can
-prove an exec capability token is expired before responses start.
-Filesystem calls are not retried on transport unavailability; they may
-refresh a rejected filesystem capability once.
-
-Create and snapshot-create accept an idempotency key so a retried call
-joins the original attempt instead of creating a second resource — see
-[Idempotency](/concepts/idempotency) for what that key does and doesn't
-protect against, and pass one explicitly whenever you might need to retry
-a create across process restarts.
-
-## Resource cleanup
-
-Go has no context-manager protocol, so use `defer` for deterministic
-cleanup:
-
-```go
-client, err := bonya.NewClient(bonya.WithAPIKey("BONYA_API_KEY"))
-if err != nil {
-	log.Fatal(err)
-}
-defer client.Close()
-
-sandbox, err := client.CreateSandbox(ctx, "bonya-dev")
-if err != nil {
-	log.Fatal(err)
-}
-defer sandbox.Delete(ctx)
-
-session, err := sandbox.ExecStream(ctx, []string{"cat"})
-if err != nil {
-	log.Fatal(err)
-}
-defer session.Close()
-session.Write([]byte("hello\n"))
-session.CloseStdin()
-```
-
-- `Client.Close()` closes cached channels and is idempotent.
-- `sandbox.Delete(ctx)` affects the remote sandbox and updates the local
-  handle to `StatusDeleted`; calling it again is a local no-op.
-- `session.Close()` (on an `*ExecSession`) cancels an unfinished session.
-- `stream.Close()` (on a `*SessionStream`) detaches an unfinished attach
-  rather than killing the guest process, which keeps running.
-- `snapshot.Delete(ctx)` deletes the remote snapshot and is a local no-op
-  when repeated on the same object.
-
-For intentionally persistent sandboxes, don't `defer sandbox.Delete(ctx)`.
-Store `sandbox.ID`, close the client, and reconnect later with
-`client.GetSandbox(ctx, id)`.
-
-## Examples
-
-Runnable programs ship in the SDK's `examples/` directory, a separate
-module so `go get` on the SDK never pulls them in:
-
-| Directory | Shows |
-|---|---|
-| `quickstart` | Create, exec, clean up |
-| `exec-streaming` | Streaming output and stdin |
-| `files` | Read, write, upload, download, list |
-| `sessions` | Persistent terminals and replay |
-| `previews` | Publishing a port to a browser |
-| `snapshots` | Capturing sandbox state |
-
-```bash
-export BONYA_API_KEY=byk_...
-cd examples && go run ./quickstart
-```
+Server errors are RFC 9457 `problem+json`; see [Errors](/concepts/errors).

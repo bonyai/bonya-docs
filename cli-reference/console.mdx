@@ -12,14 +12,14 @@ Opens an interactive shell in a sandbox — the command you want most of the tim
 ```shell
 bonya console            # pick a sandbox, then attach
 bonya console web        # by name
-bonya console sbx-1a2b…  # by id
+bonya console sb-1a2b…  # by id
 ```
 
 The sandbox argument accepts a name or id interchangeably — see [Sandbox resolution](/cli-reference/overview#how-resolution-works) for exactly how that's decided. Omit it to pick from a list of your sandboxes.
 
 ## What it does
 
-1. **Resumes the sandbox** if it's currently suspended, with a spinner while it wakes. Attaching would trigger the wake anyway, but doing it explicitly first means the wait is visible instead of looking like a hang.
+1. **Wakes the sandbox** if it's currently paused, with a spinner while it wakes. Attaching would trigger the wake anyway, but doing it explicitly first means the wait is visible instead of looking like a hang.
 2. **Attaches to the sandbox's `console` session**, creating it if it doesn't exist yet. `console` is a reserved session name used specifically for this command, so repeated runs of `bonya console` land back in the same session rather than piling up new ones.
 3. If a `console` session exists but has already finished (exited, killed, or failed), it's replaced with a fresh one rather than reused.
 
@@ -46,7 +46,7 @@ bonya console web
 ```
 
 ```shell By id
-bonya console sbx-4f1c9a2b3c4d5e6f7a8b9c0d1e2f3a4b
+bonya console sb-iwmjfuuyixl300
 ```
 
 ```shell Attach to a different session
@@ -57,3 +57,5 @@ bonya console web --session dev
 <Note>
 For full control over managed sessions — listing them, creating one running a specific command, killing one — see [`bonya session`](/cli-reference/session). `console` is a convenient shortcut for the single most common case.
 </Note>
+
+A console left idle for two minutes detaches. The session keeps running, and running the same command again puts you back where you were.

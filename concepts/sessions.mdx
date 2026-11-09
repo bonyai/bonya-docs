@@ -20,11 +20,11 @@ A session is scoped to a `sandbox_id` and keyed by `session_name`, which must ma
 curl -s -X POST "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/sessions" \
   -H "Authorization: Bearer $BONYA_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"name": "dev", "cmd": ["npm", "run", "dev"]}'
+  -d '{"name": "dev", "command": ["npm", "run", "dev"]}'
 ```
 
 ```shell CLI
-bonya session create $SANDBOX_ID dev -- npm run dev
+bonya session create $SANDBOX_NAME dev -- npm run dev
 ```
 
 ```ts TypeScript
@@ -36,24 +36,24 @@ info = sandbox.create_session("dev", ["npm", "run", "dev"])
 ```
 
 ```go Go
-info, err := sandbox.CreateSession(ctx, "dev", []string{"npm", "run", "dev"})
+info, err := sandbox.CreateSession(ctx, bonya.SessionOptions{Name: "dev", Command: []string{"npm", "run", "dev"}})
 ```
 </CodeGroup>
 
 **MCP:** the `session_create` tool covers this.
 
-The request body extends the common command shape (`cmd`, `env`, `path`) with session-specific fields:
+The request body takes the command (`command`, `env`, `working_dir`) plus session-specific fields:
 
 <ParamField body="name" type="string" required>
   Session name. Must match `^[a-z][a-z0-9-]{0,31}$`.
 </ParamField>
-<ParamField body="cmd" type="string[]" required>
+<ParamField body="command" type="string[]" required>
   Argv to run. At least one element.
 </ParamField>
 <ParamField body="env" type="object">
   Environment variables to set.
 </ParamField>
-<ParamField body="path" type="string">
+<ParamField body="working_dir" type="string">
   Working directory.
 </ParamField>
 <ParamField body="cols" type="integer">
@@ -66,17 +66,17 @@ The request body extends the common command shape (`cmd`, `env`, `path`) with se
   Whether to replace an existing session of the same name.
 </ParamField>
 
-A successful create returns `201` with `{ "session": { ...SessionInfo } }`.
+A successful create returns `201` with `{ "session": { ...session } }`.
 
 ### Name collisions
 
 <Warning>
-Creating a session whose name collides with a **live** (non-terminal) session returns `409 session_exists`. `replace: true` only takes effect against a session that has already reached a terminal state (`EXITED`, `KILLED`, or `FAILED`) — it does not let you forcibly replace a session that's still running or attached. To replace a running session, kill it first, then create.
+Creating a session whose name collides with a **live** (non-terminal) session returns `409 lifecycle_conflict`. `replace: true` only takes effect against a session that has already reached a terminal state (`exited`, `killed`, or `FAILED`) — it does not let you forcibly replace a session that's still running or attached. To replace a running session, kill it first, then create.
 </Warning>
 
 ## Session state
 
-Each `SessionInfo` reports:
+Each session reports:
 
 <ResponseField name="name" type="string" required>
   The session name.
@@ -88,7 +88,7 @@ Each `SessionInfo` reports:
   The session's working directory.
 </ResponseField>
 <ResponseField name="status" type="string" required>
-  One of `UNSPECIFIED`, `STARTING`, `IDLE`, `ATTACHED`, `EXITED`, `KILLED`, `FAILED`.
+  One of `starting`, `idle`, `attached`, `exited`, `killed`, `failed`.
 </ResponseField>
 <ResponseField name="attached" type="boolean" required>
   Whether a client is currently attached.
@@ -106,13 +106,13 @@ Each `SessionInfo` reports:
   `{ exit_code, signaled, signal }`, present once the session has exited.
 </ResponseField>
 
-`EXITED`, `KILLED`, and `FAILED` are the terminal states referenced above under name collisions; `STARTING`, `IDLE`, and `ATTACHED` are all live.
+`exited`, `killed`, and `failed` are the terminal states referenced above under name collisions; `starting`, `idle`, and `attached` are all live.
 
-## Sessions and suspension
+## Sessions and pausing
 
-A session's process never blocks idle suspend by itself. Only an **attached** client does, for as long as it stays connected — a quiet, detached session lets the sandbox warm-suspend on its normal idle schedule, and survives the resume with its process and replay buffer intact, the same session rather than a new one. Output the session keeps producing while detached still counts as activity and defers idle suspend on its own.
+A session's process never blocks idle pausing by itself. Only an **attached** client does, for as long as it stays connected — a quiet, detached session lets the sandbox pause on its normal idle schedule, and survives the wake with its process and replay buffer intact, the same session rather than a new one. Output the session keeps producing while detached still counts as activity and defers idle pausing on its own.
 
-Attaching to a session on a suspended sandbox wakes it, the same way exec traffic does — see [Sandboxes](/concepts/sandboxes#lifecycle-states) for the resume path.
+Attaching to a session on an idle-paused sandbox wakes it, the same way exec traffic does. A sandbox you paused explicitly stays paused until you wake it with keepalive; see [Sandboxes](/concepts/sandboxes#lifecycle-states).
 
 ## Listing sessions
 
@@ -138,8 +138,8 @@ for info in sandbox.list_sessions():
 ```
 
 ```go Go
-result, err := sandbox.ListSessions(ctx)
-for _, info := range result.Sessions {
+sessions, err := sandbox.ListSessions(ctx)
+for _, info := range sessions {
     fmt.Println(info.Name, info.Status)
 }
 ```
@@ -147,17 +147,13 @@ for _, info := range result.Sessions {
 
 **MCP:** the `session_list` tool covers this.
 
-Returns `SessionListResponse`:
+Returns `{ "sessions": [...] }`:
 
-<ResponseField name="sessions" type="SessionInfo[]" required>
+<ResponseField name="sessions" type="session[]" required>
   All sessions tracked for the sandbox.
 </ResponseField>
-<ResponseField name="sandbox_suspended" type="boolean" required>
-  Whether the sandbox was suspended when this list was produced.
-</ResponseField>
-
 <Note>
-Listing sessions **never wakes** a suspended sandbox. If the sandbox is suspended, the response answers from a snapshot of session state taken at suspend time, and `sandbox_suspended` is `true` — it does not resume the sandbox to get a live answer. To act on the sessions themselves, resume the sandbox first (see [Sandboxes](/concepts/sandboxes)).
+Listing sessions never wakes a paused sandbox.
 </Note>
 
 ## Attaching to a session
@@ -166,7 +162,7 @@ Listing sessions **never wakes** a suspended sandbox. If the sandbox is suspende
 GET /v1/sandbox/{sandbox_id}/sessions/{session_name}/attach
 ```
 
-This is a WebSocket upgrade — see [WebSockets](/concepts/websockets) for how the upgrade, the START frame (`AttachStartRequest`), and admission work. Multiple clients can attach to the same session.
+This is a WebSocket upgrade — see [WebSockets](/concepts/websockets) for the protocol. Multiple clients can attach to the same session.
 
 <CodeGroup>
 ```shell CLI
@@ -178,7 +174,7 @@ const session = await sandbox.attachSession("dev");
 for await (const event of session) {
   // ...
 }
-session.detach();
+await session.detach();
 ```
 
 ```python Python
@@ -189,14 +185,11 @@ session.detach()
 ```
 
 ```go Go
-stream, err := sandbox.AttachSession(ctx, "dev")
-for {
-    event, err := stream.Next()
-    if err != nil || event == nil {
-        break
-    }
+att, err := sandbox.AttachSession(ctx, "dev", bonya.AttachOptions{Output: os.Stdout})
+if err != nil {
+    log.Fatal(err)
 }
-stream.Detach()
+att.Detach() // the session keeps running
 ```
 </CodeGroup>
 
@@ -225,13 +218,13 @@ sandbox.kill_session("dev")
 ```
 
 ```go Go
-sandbox.KillSession(ctx, "dev")
+sandbox.KillSession(ctx, "dev", bonya.KillSessionOptions{})
 ```
 </CodeGroup>
 
 **MCP:** the `session_kill` tool covers this, with `signal` and `grace_ms` fields matching the REST body.
 
-Request body (`SessionKillRequest`, optional):
+Request body (`the kill request`, optional):
 
 <ParamField body="signal" type="string" default="TERM">
   One of `TERM`, `KILL`, `INT`, `HUP`.
@@ -240,7 +233,7 @@ Request body (`SessionKillRequest`, optional):
   Milliseconds to wait after the signal before the session is considered killed, 0–60000.
 </ParamField>
 
-Returns `200` with `{ "session": { ...SessionInfo } }` reflecting the signal having been delivered.
+Returns `200` with `{ "session": { ...session } }` reflecting the signal having been delivered.
 
 ## Related
 

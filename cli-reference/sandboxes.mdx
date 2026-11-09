@@ -3,140 +3,91 @@ title: Sandboxes
 description: list, get, delete, and exec — inspecting and managing sandboxes you already have
 ---
 
-import { TerminalOutput } from "/snippets/terminal-output.jsx";
-
-This page covers the **Sandboxes** command group: `list`, `get`, `delete`, and `exec`. For creating a sandbox, see [`create`](/cli-reference/create); for a shell, see [`console`](/cli-reference/console).
+This page covers the **Sandboxes** command group: `list`, `get`, `delete`, and `exec`. For creating a sandbox, see [`create`](/cli-reference/create); for a shell, see [`console`](/cli-reference/console). Jobs, schedules and templates have their own pages: [`job`](/cli-reference/job), [`schedule`](/cli-reference/schedule) and [`template`](/cli-reference/template).
 
 ## `bonya list`
 
 <Info>Aliases: `ls`, `l`</Info>
 
-Lists sandboxes.
-
 ```shell
-bonya list [--state running,suspended] [--name web] [--limit 20]
+bonya list [--state running,warm] [--name web] [--limit 20]
 ```
 
 | Flag | Default | Description |
 | --- | --- | --- |
-| `--state` | (all) | Comma-separated state filter. Valid values: `creating`, `running`, `suspending`, `suspended`, `resuming`, `failed`. |
+| `--state` | (all) | Comma-separated state filter. Valid values: `creating`, `running`, `cooling`, `warm`, `cold`, `waking`, `failed`, `deleting`, `lost`. |
 | `--name` | (all) | Only list sandboxes with this exact (case-sensitive) name. |
 | `--limit` | `0` (unlimited) | Maximum number of sandboxes to return. |
 
-<CodeGroup>
-```shell List everything
-bonya list
+```console
+$ bonya list
+ID                 NAME                STATUS   SOURCE                                CREATED
+sb-iwmjfuuyixl300  docs-probe          running  bonya-dev-x86_64-xeon8358-1c1024m-v1  2026-11-10 00:56
+sb-bpyk22c3ei3hfx  winter-canyon-278e  cold     bonya-dev-x86_64-xeon8358-1c1024m-v1  2026-11-08 21:05
 ```
 
-```shell Only running sandboxes
-bonya list --state running
+`SOURCE` is the image or template version the sandbox started from. Deleted sandboxes are never listed.
+
+With `--json`, each entry has `id`, `name`, `state`, `template_version`, `vcpus`, `memory_mib` and `created_at`:
+
+```shell
+bonya list --json | jq -r '.[] | select(.state=="running") | .id'
 ```
-
-```shell Multiple states
-bonya list --state running,suspended
-```
-
-```shell As JSON, filtered with jq
-bonya list --json | jq -r '.[] | select(.last_observed_status=="running") | .id'
-```
-</CodeGroup>
-
-On a real terminal, `bonya list` looks like this:
-
-<TerminalOutput lines={[
-  [{text: "┌─────────────────────────────────────────────────────────────────────────┐", color: "#444444"}],
-  [{text: "│", color: "#444444"}, {text: " "}, {text: "ID", color: "#5fafff", bold: true}, {text: "            "}, {text: "NAME", color: "#5fafff", bold: true}, {text: "               "}, {text: "STATUS", color: "#5fafff", bold: true}, {text: "     "}, {text: "TEMPLATE", color: "#5fafff", bold: true}, {text: "   "}, {text: "CREATED", color: "#5fafff", bold: true}, {text: "          "}, {text: "│", color: "#444444"}],
-  [{text: "├─────────────────────────────────────────────────────────────────────────┤", color: "#444444"}],
-  [{text: "│", color: "#444444"}, {text: " sbx-4f1c9a2…  "}, {text: "web-server", color: "#5fd787"}, {text: "  "}, {text: "suspended", color: "#ffd700"}, {text: "  bonya-dev  2026-09-20 14:32 "}, {text: "│", color: "#444444"}],
-  [{text: "└─────────────────────────────────────────────────────────────────────────┘", color: "#444444"}],
-]} />
 
 ## `bonya get [sandbox]`
 
 <Info>Aliases: `show`, `info`</Info>
 
-Shows one sandbox's details — id, name, status, template, version, and operation id.
+Shows one sandbox's details.
 
-```shell
-bonya get web
-bonya get sbx-4f1c9a2b3c4d5e6f7a8b9c0d1e2f3a4b
-bonya get                # picker
+```console
+$ bonya get docs-probe
+ID       sb-iwmjfuuyixl300
+NAME     docs-probe
+STATUS   running
+SOURCE   bonya-dev-x86_64-xeon8358-1c1024m-v1
+SIZE     1 vCPU, 1024 MiB
+CREATED  2026-11-10 00:56
 ```
-
-| Flag | Default | Description |
-| --- | --- | --- |
-| `--by-name` | `false` | Treat the argument as a name even if it looks like an id. |
 
 ## `bonya delete [sandbox]`
 
 <Info>Aliases: `rm`, `del`</Info>
 
-Tears down a sandbox. This is not reversible.
+Deletes a sandbox. This is not reversible, so an interactive terminal asks for confirmation first.
+
+| Flag | Description |
+| --- | --- |
+| `--force` | Skip the confirmation prompt. Non-interactively there is no prompt, so naming the sandbox is the confirmation. |
 
 ```shell
-bonya delete web
-bonya delete web --force
-bonya delete                # picker
+bonya delete docs-probe --force
 ```
-
-| Flag | Default | Description |
-| --- | --- | --- |
-| `--force` | `false` | Skip the confirmation prompt. |
-| `--by-name` | `false` | Treat the argument as a name even if it looks like an id. |
-
-<Note>
-On an interactive terminal, `delete` asks "Delete &lt;name&gt;? This cannot be undone." before proceeding, unless `--force` is passed. Non-interactively there is no prompt at all — naming the sandbox on the command line is itself the confirmation, so `--force` has no effect there.
-</Note>
-
-Deleting an already-deleted sandbox is not an error — the result reports `Already deleted: <id>` instead of `Deleted <id>`.
 
 ## `bonya exec [sandbox] [flags] -- cmd [args...]`
 
 <Info>Aliases: `run`, `x`</Info>
 
-Runs a command in a sandbox and exits with the remote command's exit code.
+Runs a command in a sandbox, prints its output, and exits with the remote command's exit code.
 
 ```shell
-bonya exec web -- ls /workspace
-bonya exec -- ls /workspace          # prompts for the sandbox
-bonya exec                           # prompts for both sandbox and command
+bonya exec web -- ls /root
+bonya exec -- ls /root        # prompts for the sandbox
+tar -c . | bonya exec web -- tar -x -C /tmp
+bonya exec web --tty -- bash  # interactive
 ```
-
-`exec` takes any number of arguments, so it's valid to run it with **no** sandbox and **no** command — it prompts for whichever is missing (interactively only; see [non-interactive behavior](/cli-reference/configuration#non-interactive-behavior)).
 
 | Flag | Default | Description |
 | --- | --- | --- |
-| `--env` | — | Environment variable in `KEY=VALUE` form. Repeatable. |
-| `--cwd` | — | Remote working directory. |
-| `--tty` | `false` | Allocate a pseudo-TTY and forward stdin interactively. |
-| `--cols` | terminal size | TTY columns. Only meaningful with `--tty`. |
-| `--rows` | terminal size | TTY rows. Only meaningful with `--tty`. |
-| `--by-name` | `false` | Treat the sandbox argument as a name even if it looks like an id. |
+| `--env KEY=VALUE` | — | Environment variable (repeatable). |
+| `--cwd` | `/` | Remote working directory. |
+| `--tty` | off | Allocate a pseudo-TTY and forward stdin interactively; resizing your window resizes the remote terminal. |
+| `--no-stdin`, `-n` | off | Don't forward piped stdin. Use it inside a `while read` loop. |
+| `--timeout` | none | Stop the command after this long, e.g. `10m`. The sandbox enforces it even if the CLI goes away. Exit code `124`. |
+| `--cols`, `--rows` | your terminal | TTY size (requires `--tty`). |
 
-With `--tty` and no explicit `--cols`/`--rows`, the terminal size defaults to your own and resizes propagate as you resize your window. Without `--tty`, stdout and stderr are captured and printed separately (buffered, not streamed).
+Piped stdin is forwarded to the command and closed at its end. Ctrl-C or SIGTERM stops the remote command.
 
-<Warning>
-A remote command that exits non-zero is a **faithful result**, not a CLI failure — `bonya exec`'s own exit code mirrors it exactly, with no extra error message. Don't treat a non-zero `bonya exec` exit code as a CLI bug; check what the remote command itself reported.
-</Warning>
-
-<CodeGroup>
-```shell Basic command
-bonya exec web -- printf 'hello\n'
-```
-
-```shell With an environment variable
-bonya exec web --env MODE=development -- python3 -c 'import os; print(os.environ["MODE"])'
-```
-
-```shell Fully interactive TTY
-bonya exec web --tty -- bash
-```
-
-```shell Piped stdin still works
-echo hi | bonya exec web --tty -- cat
-```
-
-```shell Working directory
-bonya exec web --cwd /workspace -- pwd
-```
-</CodeGroup>
+<Note>
+A command starts in `/` as `root`, with `HOME=/root`. Use `--cwd` to start somewhere else.
+</Note>

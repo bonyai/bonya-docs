@@ -9,11 +9,11 @@ Every non-2xx response from the Bonya API is an [RFC 9457](https://www.rfc-edito
 
 ```json
 {
-  "type": "https://docs.bonya.ai/errors/session-exists",
-  "title": "Session already exists",
+  "type": "urn:bonya:problem:lifecycle_conflict",
+  "title": "Lifecycle state conflict",
   "status": 409,
-  "code": "session_exists",
-  "detail": "A live session named \"build\" already exists on this sandbox."
+  "code": "lifecycle_conflict",
+  "detail": "session \"dev\" is running or attached"
 }
 ```
 
@@ -41,18 +41,30 @@ Every non-2xx response from the Bonya API is an [RFC 9457](https://www.rfc-edito
 Branch your error handling on `code`, not on `status` or `title`. `code` is the stable, machine-readable field this API guarantees; `status` and `title` are for humans and logs.
 </Warning>
 
-## Known error codes
+## Error codes
 
-These are the named `code` values documented in the API contract, the HTTP status they arrive with, and the operation that returns them.
-
-| `code` | Status | Where it happens |
+| `code` | Status | Meaning |
 | --- | --- | --- |
-| `session_exists` | 409 | `POST /v1/sandbox/{sandbox_id}/sessions` — creating a session whose name collides with a **live** session. Replacing a session by name only works for sessions that have already reached a terminal state. |
-| `final_owner` | 409 | `PATCH /v1/organizations/{organization_id}/members/{user_id}` (demoting) and `DELETE /v1/organizations/{organization_id}/members/{user_id}` (removing) — an organization's last remaining owner can't be demoted or removed. This is also why the sole owner of a personal organization can't leave it. |
-| `lifecycle_conflict` | 409 | `POST /v1/organizations/{organization_id}/invites` — creating an invite for an email address that already has a live invitation to the same organization. |
-| `validation_failed` | 400 | `POST /v1/organizations/{organization_id}/invites` — attempting to invite into a personal organization, which can't be invited into. |
+| `malformed_request` | 400 | The request couldn't be parsed. |
+| `validation_failed` | 400 | The request parsed but a field is invalid. |
+| `invalid_credential` | 401 | The API key or token is missing, wrong or revoked. |
+| `capability_expired` | 401 | A sandbox capability token expired. Request a new one. |
+| `forbidden` | 403 | Authenticated, but not allowed to do this. API keys can't manage organizations, members, invites or API keys. |
+| `not_found` | 404 | The resource doesn't exist, or isn't in your organization. |
+| `lifecycle_conflict` | 409 | The resource is in a state that refuses the call: a live session with that name, a sandbox that can't be snapshotted yet, or a reused idempotency key with a different request. |
+| `snapshot_in_use` | 409 | The snapshot is still referenced. |
+| `final_owner` | 409 | An organization's last owner can't be demoted or removed. |
+| `payload_too_large` | 413 | The body or file exceeds a limit. |
+| `exec_timeout` | 408 | A buffered exec ran past its timeout. |
+| `rate_limited` | 429 | Too many requests, or request capacity is exhausted. Honor `Retry-After`. |
+| `snapshot_limit_reached` | 429 | You've reached your snapshot limit. |
+| `gpu_limit_exceeded` | 429 | The request exceeds your organization's GPU limit. |
+| `no_capacity`, `capacity_unavailable`, `gpu_capacity_unavailable` | 503 | No capacity right now. Retry later. |
+| `template_preparing` | 503 | The template's image is still being prepared. Retry shortly. |
+| `upstream_unavailable` | 503 | A backing service is unavailable. Retry. |
+| `internal` | 500 | An unexpected server error. |
 
-This list covers the error codes named explicitly in the API contract. Other operations return `Problem` responses too (for example, malformed input generally, or a `404` for an unknown or cross-organization resource) — those follow the same shape but don't have a single contract-documented `code` literal beyond what's listed above.
+This table lists the stable codes. The exact status can vary by endpoint, so branch on `code`.
 
 <Note>
 A `404` is also the deliberate response for both "doesn't exist" and "exists but isn't yours" — for example, a well-formed `X-Bonya-Organization-ID` for an organization you don't belong to returns `404`, not `403`, so the API doesn't confirm the organization's existence to non-members. Accepting an invitation token — unknown, addressed to someone else, already consumed, revoked, or expired — is likewise a single indistinguishable `404` rather than a code that would let you tell those cases apart.

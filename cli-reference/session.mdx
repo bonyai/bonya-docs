@@ -1,106 +1,52 @@
 ---
 title: session
-description: Managed session operations on a sandbox — create, list, attach, kill
+description: Create, list, attach to, and kill managed terminal sessions
 ---
-
-import { TerminalOutput } from "/snippets/terminal-output.jsx";
 
 ## `bonya session`
 
 <Info>Aliases: `sess`, `s`</Info>
 
-Managed sessions are named terminals that keep running after you disconnect, and survive the sandbox suspending and resuming. Reattaching replays what the session produced while nobody was watching.
-
-For the common case — "give me a shell" — use [`bonya console`](/cli-reference/console) instead, which is a shortcut for attaching to a session named `console`. Use `bonya session` directly when you want a named, scriptable session (a dev server, a long build) that isn't the interactive console.
+A session is a named terminal process that outlives your connection and replays what it produced while nobody was attached. See [Sessions](/concepts/sessions).
 
 ## `create`
 
-Creates a named managed session running a given command.
-
 ```shell
-bonya session create [sandbox] <name> -- cmd [args...]
+bonya session create [sandbox] <name> [--cols N] [--rows N] -- cmd [args...]
 ```
 
-| Flag | Default | Description |
-| --- | --- | --- |
-| `--cols` | server default | TTY columns. |
-| `--rows` | server default | TTY rows. |
-| `--by-name` | `false` | Treat the sandbox argument as a name even if it looks like an id. |
+Session names match `^[a-z][a-z0-9-]{0,31}$`.
 
-```shell
-bonya session create web dev -- npm run dev
+```console
+$ bonya session create docs-probe web -- python3 -m http.server 3000
+NAME         web
+STATUS       idle
+COMMAND      python3 -m http.server 3000
+WORKING DIR
 ```
 
 ## `list`
 
-Lists a sandbox's managed sessions.
-
-```shell
-bonya session list [sandbox]
+```console
+$ bonya session list docs-probe
+NAME  STATUS  ATTACHED  COMMAND                      STARTED
+web   idle    no        python3 -m http.server 3000  2026-11-10 00:56
 ```
-
-```shell
-bonya session list web
-```
-
-If the sandbox is currently suspended, the listing is served from a suspend-time snapshot and the output notes that explicitly.
-
-On a real terminal, `bonya session list` looks like this:
-
-<TerminalOutput lines={[
-  [{text: "┌───────────────────────────────────────────────────────────────┐", color: "#444444"}],
-  [{text: "│", color: "#444444"}, {text: " "}, {text: "NAME", color: "#5fafff", bold: true}, {text: "          "}, {text: "STATUS", color: "#5fafff", bold: true}, {text: "  "}, {text: "ATTACHED", color: "#5fafff", bold: true}, {text: "  "}, {text: "COMMAND", color: "#5fafff", bold: true}, {text: "      "}, {text: "STARTED", color: "#5fafff", bold: true}, {text: "          "}, {text: "│", color: "#444444"}],
-  [{text: "├───────────────────────────────────────────────────────────────┤", color: "#444444"}],
-  [{text: "│", color: "#444444"}, {text: " "}, {text: "dev-server", color: "#5fd787"}, {text: "    "}, {text: "exited", color: "#626262"}, {text: "  "}, {text: "no", color: "#626262"}, {text: "        npm run dev  2026-09-20 14:32 "}, {text: "│", color: "#444444"}],
-  [{text: "│", color: "#444444"}, {text: " "}, {text: "dev-server-2", color: "#5fd787"}, {text: "  "}, {text: "idle", color: "#ffd700"}, {text: "    "}, {text: "no", color: "#626262"}, {text: "        sleep 3600   2026-09-20 14:32 "}, {text: "│", color: "#444444"}],
-  [{text: "└───────────────────────────────────────────────────────────────┘", color: "#444444"}],
-  [{text: "Sandbox is suspended; listed from the suspend-time snapshot.", color: "#626262"}],
-]} />
 
 ## `attach`
-
-Connects to a running managed session.
 
 ```shell
 bonya session attach [sandbox] <name>
 ```
 
-| Flag | Default | Description |
-| --- | --- | --- |
-| `--cols` | your terminal | TTY columns to apply at attach time. |
-| `--rows` | your terminal | TTY rows to apply at attach time. |
-| `--by-name` | `false` | Treat the sandbox argument as a name even if it looks like an id. |
+From a terminal this is fully interactive: stdin is forwarded and window resizes are propagated. Piped or redirected, it streams the session's output read-only, so `bonya session attach web dev | tee log` works.
 
-From a terminal, `attach` is fully interactive: stdin is forwarded and window resizes propagate. Piped or redirected, it streams the session's output read-only:
-
-```shell
-bonya session attach web dev | tee log
-```
-
-<Warning>
-Attaching **preempts** any other client already attached to that session — only one live attachment exists at a time. Detaching (Ctrl+D, closing the terminal) leaves the session itself running.
-</Warning>
+Detaching leaves the session running. Attaching preempts any other client already attached. From a terminal, two minutes without typing detach, so a forgotten attach does not keep the sandbox awake.
 
 ## `kill`
-
-Kills a managed session.
 
 ```shell
 bonya session kill [sandbox] <name> [--signal TERM] [--grace-ms 5000]
 ```
 
-| Flag | Default | Description |
-| --- | --- | --- |
-| `--signal` | `TERM` | Signal to send. |
-| `--grace-ms` | `5000` | Milliseconds to wait after the signal before sending `SIGKILL`. |
-| `--by-name` | `false` | Treat the sandbox argument as a name even if it looks like an id. |
-
-<CodeGroup>
-```shell Graceful kill (default)
-bonya session kill web dev
-```
-
-```shell Force kill immediately
-bonya session kill web dev --signal KILL
-```
-</CodeGroup>
+Sends the signal, then kills the process group after the grace period.

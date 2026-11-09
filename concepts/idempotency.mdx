@@ -3,10 +3,14 @@ title: Idempotency
 description: Safely retry create requests with the Idempotency-Key header
 ---
 
-Two operations accept an `Idempotency-Key` request header:
+These operations accept an `Idempotency-Key` request header:
 
 - `POST /v1/sandbox` — create a sandbox.
+- `POST /v1/sandbox/{sandbox_id}/fork` — fork a sandbox.
+- `POST /v1/sandbox/{sandbox_id}/snapshots` — create a snapshot.
 - `POST /v1/sandbox/{sandbox_id}/previews` — create a preview.
+- `POST /v1/job` and `POST /v1/job-schedule` — start a job or create a schedule.
+- Streaming exec — reconnect to the same run.
 
 <ParamField header="Idempotency-Key" type="string">
   Optional. Maximum length **255 characters**.
@@ -17,7 +21,7 @@ Two operations accept an `Idempotency-Key` request header:
 Per the API contract, an absent `Idempotency-Key` means the server generates one on your behalf — and a server-generated key **provides no deduplication**. Only a client-supplied key actually dedupes retries.
 
 <Warning>
-If you don't send `Idempotency-Key` yourself, retrying a create request (for example, after a timeout where you're not sure the first request landed) can create a second sandbox or a second preview. The server generating its own key internally does not protect you from this — that internal key isn't shared across separate requests you make.
+If you don't send `Idempotency-Key` yourself, retrying a create request (for example, after a timeout where you're not sure the first request landed) can create a second sandbox, snapshot, preview or job run. The server generating its own key internally does not protect you from this — that internal key isn't shared across separate requests you make.
 </Warning>
 
 ## How to use it
@@ -29,11 +33,11 @@ curl -s -X POST https://api.bonya.ai/v1/sandbox \
   -H "Authorization: Bearer $BONYA_API_KEY" \
   -H "Idempotency-Key: $(uuidgen)" \
   -H "Content-Type: application/json" \
-  -d '{"template_id": "bonya-dev"}'
+  -d '{"name": "scratch"}'
 ```
 
 If that request needs to be retried — a network timeout, a client crash before the response was read — reuse the exact same `Idempotency-Key` value on the retry rather than generating a new one. A new key on retry is indistinguishable from a genuinely new create request.
 
 <Note>
-`Idempotency-Key` is only accepted on the two create endpoints listed above. Other operations, including delete and resume, don't take this header — resume in particular already returns `already_running: true` as a no-op signal instead of needing idempotency-key support.
+The SDKs generate a key for you and reuse it across their own retries. Pass your own (`idempotencyKey` / `idempotency_key`) when you want to retry across process restarts. Reusing a key with a *different* request returns `409 lifecycle_conflict`.
 </Note>

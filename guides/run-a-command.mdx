@@ -22,11 +22,11 @@ The default choice for scripts, CI, and anything where you just want a result. S
 curl -s -X POST "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/exec" \
   -H "Authorization: Bearer $BONYA_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"cmd": ["bash", "-lc", "echo hi"], "timeout_s": 30}'
+  -d '{"command": ["bash", "-lc", "echo hi"], "timeout_ms": 30000}'
 ```
 
 ```shell CLI
-bonya exec $SANDBOX_ID -- bash -lc 'echo hi'
+bonya exec web -- bash -lc 'echo hi'
 ```
 
 ```ts TypeScript
@@ -54,11 +54,11 @@ An HTTP upgrade to a WebSocket for a transient, interactive terminal — one-off
 # speak the protocol after the 101 response.
 websocat "wss://api.bonya.ai/v1/sandbox/$SANDBOX_ID/exec" \
   -H "Authorization: Bearer $BONYA_API_KEY"
-# then send a TTYStartRequest as the START frame
+# then send a START frame (see /concepts/websockets)
 ```
 
 ```shell CLI
-bonya console $SANDBOX_ID
+bonya console web
 ```
 
 ```ts TypeScript
@@ -81,7 +81,7 @@ For a command that should keep running after you disconnect — a dev server, a 
 curl -s -X POST "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/sessions" \
   -H "Authorization: Bearer $BONYA_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"name": "dev", "cmd": ["npm", "run", "dev"]}'
+  -d '{"name": "dev", "command": ["npm", "run", "dev"]}'
 
 # list
 curl -s "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/sessions" \
@@ -93,10 +93,10 @@ curl -s -X POST "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/sessions/dev/kill" 
 ```
 
 ```shell CLI
-bonya session create $SANDBOX_ID dev -- npm run dev
-bonya session list $SANDBOX_ID
-bonya session attach $SANDBOX_ID dev
-bonya session kill $SANDBOX_ID dev
+bonya session create web dev -- npm run dev
+bonya session list web
+bonya session attach web dev
+bonya session kill web dev
 ```
 
 ```python Python

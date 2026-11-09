@@ -3,7 +3,7 @@ title: Quickstart
 description: Create a sandbox and run a command in under 5 minutes
 ---
 
-This walks through the smallest possible loop: get a key, create a sandbox, run a command in it, clean up. Every example uses the `bonya-dev` template — see [Templates](/concepts/templates) for what that means.
+This walks through the smallest possible loop: get a key, create a sandbox, run a command in it, clean up. A sandbox boots in about a second from the deployment's default image.
 
 <Steps>
   <Step title="Get an API key">
@@ -45,25 +45,25 @@ This walks through the smallest possible loop: get a key, create a sandbox, run 
     </CodeGroup>
   </Step>
   <Step title="Create a sandbox">
-    A sandbox can name a `template_id`, or omit it to use the deployment's configured default template. `POST /v1/sandbox` returns `202` immediately by default, with the sandbox still `CREATING` — pass `?wait=ready` to block until it's up and get `201` back instead.
+    `POST /v1/sandbox` returns `202` immediately by default, with the sandbox still `creating`. Pass `?wait=ready` to block until it is running and get `201` back instead. An empty body uses the default image; you can also pass `image`, `snapshot`, `template_id`, `name`, `network`, `env` and more.
 
     <CodeGroup>
     ```shell cURL
     curl -s -X POST "https://api.bonya.ai/v1/sandbox?wait=ready" \
       -H "Authorization: Bearer $BONYA_API_KEY" \
       -H "Content-Type: application/json" \
-      -d '{"template_id": "bonya-dev"}'
+      -d '{"name": "scratch"}'
     ```
 
     ```shell CLI
-    bonya create --template bonya-dev
+    bonya create scratch
     ```
 
     ```ts TypeScript
     import { Bonya } from "@bonya-ai/bonya";
 
     const client = new Bonya();
-    const sandbox = await client.createSandbox({ template: "bonya-dev" });
+    const sandbox = await client.createSandbox({ name: "scratch" });
     console.log(sandbox.id);
     ```
 
@@ -71,7 +71,7 @@ This walks through the smallest possible loop: get a key, create a sandbox, run 
     from bonya import Bonya
 
     with Bonya() as client:
-        sandbox = client.create_sandbox(template="bonya-dev")
+        sandbox = client.create_sandbox(name="scratch")
         print(sandbox.id)
     ```
 
@@ -80,10 +80,9 @@ This walks through the smallest possible loop: get a key, create a sandbox, run 
     if err != nil {
         log.Fatal(err)
     }
-    defer client.Close()
 
     ctx := context.Background()
-    sandbox, err := client.CreateSandbox(ctx, "bonya-dev")
+    sandbox, err := client.Create(ctx, bonya.CreateOptions{Name: "scratch"})
     if err != nil {
         log.Fatal(err)
     }
@@ -91,17 +90,17 @@ This walks through the smallest possible loop: get a key, create a sandbox, run 
     ```
     </CodeGroup>
 
-    The response body is `{ "sandbox": { "sandbox_id": "...", "state": "RUNNING", "template_id": "bonya-dev", ... } }`. See [Sandboxes](/concepts/sandboxes) for the full lifecycle.
+    The response is the sandbox itself: `{ "id": "sb-...", "name": "scratch", "state": "running", "vcpus": 1, "memory_mib": 1024, ... }`. See [Sandboxes](/concepts/sandboxes) for the full lifecycle.
   </Step>
   <Step title="Run a command">
-    The simplest way to run something is buffered exec — one JSON request, one JSON response, no WebSocket involved. A non-zero exit code is still a `200`; check `exit_code` in the body.
+    The simplest way to run something is buffered exec — one JSON request, one JSON response, no WebSocket involved. A non-zero exit code is still a `200`; check `exit_code` in the body, which looks like `{"stdout": "hello from bonya\n", "stderr": "", "exit_code": 0, "took_ms": 60.7}`.
 
     <CodeGroup>
     ```shell cURL
     curl -s -X POST "https://api.bonya.ai/v1/sandbox/$SANDBOX_ID/exec" \
       -H "Authorization: Bearer $BONYA_API_KEY" \
       -H "Content-Type: application/json" \
-      -d '{"cmd": ["echo", "hello from bonya"]}'
+      -d '{"command": ["echo", "hello from bonya"]}'
     ```
 
     ```shell CLI
@@ -119,18 +118,18 @@ This walks through the smallest possible loop: get a key, create a sandbox, run 
     ```
 
     ```go Go
-    result, err := sandbox.Exec(ctx, []string{"echo", "hello from bonya"})
+    result, err := sandbox.Exec(ctx, "echo", "hello from bonya")
     if err != nil {
         log.Fatal(err)
     }
-    fmt.Println(result.Stdout(), result.ExitCode)
+    fmt.Println(result.Stdout, result.ExitCode)
     ```
     </CodeGroup>
 
     That's one of three ways to run a command — see [Run a command](/guides/run-a-command) for the WebSocket TTY and managed-session modes, which are what you want for interactive shells or long-running processes.
   </Step>
   <Step title="Clean up">
-    Deletion is a synchronous teardown — the call doesn't return until the sandbox is gone.
+    Deletion returns the sandbox with `state: "deleted"`.
 
     <CodeGroup>
     ```shell cURL
