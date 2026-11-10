@@ -413,7 +413,7 @@ client.create_secret_set("app-env", {"API_URL": "https://example.com"})
 ```
 </CodeGroup>
 
-The CLI and the Go SDK only browse templates (`bonya template list`, `client.ListTemplates`). See [Templates](/concepts/templates) and [Secrets and registries](/concepts/secrets).
+The Go SDK has the same calls (`client.CreateTemplate`, `client.CreateSecretSet`); the CLI only lists templates (`bonya template list`). See [Templates](/concepts/templates) and [Secrets and registries](/concepts/secrets).
 
 ## Delete a sandbox
 

@@ -10,7 +10,7 @@ A **sandbox** is the resource everything else in the API is scoped to. Sessions,
 A sandbox gets a server-assigned `id` such as `sb-bpyk22c3ei3hfx`, which is the only identifier every other operation accepts. A sandbox can also have a `name`, but names are a display label, not an identifier:
 
 - `name` is optional on create (up to 80 characters). If you omit it, the service generates a friendly one such as `winter-canyon-278e`.
-- `name` is **not unique**. The `name` filter on list is an exact match and can match more than one sandbox.
+- `name` is **not unique**. Several sandboxes can share a name, so look one up by `id` when it matters.
 
 <Note>
 Always key off `id` in code you write against this API. Treat `name` as something to show a human.
@@ -154,7 +154,6 @@ Create also accepts an `Idempotency-Key` header. See [Idempotency](/concepts/ide
 - `page_size` — 1 to 100.
 - `page_token` — the cursor from a previous page's `next_page_token`.
 - `states` — filter by one or more states (repeat the parameter).
-- `name` — exact-match filter.
 
 The response is `{ "sandboxes": [...], "next_page_token": "..." }`.
 

@@ -11,11 +11,12 @@ description: Browse the template catalog
 
 <Info>Aliases: `ls`, `l`</Info>
 
-Lists the templates and versions available on the deployment.
+Lists your organization's saved templates.
 
 ```console
 $ bonya template list
-No templates are available on this deployment.
+TEMPLATE  NAME      REVISION  IMAGE      DESCRIPTION
+tpl-...   node-dev  2         node:22
 ```
 
-An empty catalog is normal: `bonya create` then starts from the default image. The CLI only browses templates. To create or edit your own templates, use the [SDKs](/sdks/typescript/usage#templates) or the [REST API](/api-reference).
+With none yet it prints `No templates yet.` The CLI only lists templates. To create or edit them use the [SDKs](/sdks/typescript/usage#templates) or the [REST API](/api-reference), then use one with `bonya job run --template`.

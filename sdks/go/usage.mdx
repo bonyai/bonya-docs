@@ -10,7 +10,7 @@ Every call takes a `context.Context` first and returns an `*Error` on failure (s
 | I want to… | Call |
 |---|---|
 | Start a sandbox | `client.Create(ctx, bonya.CreateOptions{...})` |
-| Reconnect to one | `client.Get(ctx, id)` / `client.Sandbox(id)` |
+| Reconnect to one | `client.Get(ctx, id)` / `client.GetByName(ctx, name)` / `client.Sandbox(id)` |
 | Find my sandboxes | `client.List(ctx, opts)` / `client.ListAll(ctx, opts)` |
 | Run a command | `sandbox.Exec(ctx, "ls", "-la")` / `sandbox.ExecWithOptions(ctx, opts)` |
 | Stream output live | `sandbox.ExecStream(ctx, opts)` |
@@ -21,7 +21,11 @@ Every call takes a `context.Context` first and returns an `*Error` on failure (s
 | Clone a running sandbox | `sandbox.Fork(ctx, bonya.ForkOptions{Count: 2})` |
 | Pause or keep awake | `sandbox.Pause(ctx, bonya.PauseWarm)` / `sandbox.Keepalive(ctx, d)` |
 | Run a managed or scheduled job | `client.RunJob(ctx, spec)` / `client.CreateJobSchedule(ctx, spec)` |
-| See templates | `client.ListTemplates(ctx)` |
+| Save a launch configuration | `client.CreateTemplate(ctx, ...)` / `ListTemplates` / `UpdateTemplate` / `DeleteTemplate` |
+| Pull private images | `client.CreateRegistryConnection(ctx, ...)` |
+| Keep credentials out of code | `client.CreateSecret(ctx, name, value)` / `client.CreateSecretSet(ctx, ...)` |
+| See GPU capacity | `client.ListGPUOptions(ctx)` |
+| Restrict egress | `sandbox.UpdateNetwork(ctx, policy)` |
 | Switch organization | `client.ListOrganizations(ctx)` / `bonya.WithOrganizationID(id)` |
 
 ## Create sandboxes
@@ -30,6 +34,9 @@ Every call takes a `context.Context` first and returns an `*Error` on failure (s
 sandbox, err := client.Create(ctx, bonya.CreateOptions{
 	Name:           "scratch",
 	Image:          "python:3.12", // optional: a public OCI image
+	Env:            map[string]string{"APP_ENV": "dev"},
+	SecretSets:     []string{"app-env"},
+	Network:        &bonya.NetworkPolicy{Mode: "open"},
 	IdempotencyKey: "create-job-123",
 })
 ```
@@ -39,6 +46,10 @@ sandbox, err := client.Create(ctx, bonya.CreateOptions{
 | `Name` | Display name. Empty generates one. |
 | `Image` | A public container image reference (tag or digest). Cannot be combined with `Snapshot`. |
 | `Snapshot` | Restore from a snapshot id. The new sandbox boots the snapshot's files with fresh processes. |
+| `TemplateID`, `TemplateRevision` | Start from a saved template. Cannot be combined with `Image` or `Snapshot`. |
+| `GPU` | `&bonya.GPURequest{Type, Count}`. Needs `Image` or an image template. See `ListGPUOptions`. |
+| `Network` | Egress policy: `open`, `allowlist` or `airgap`. |
+| `Env`, `SecretSets` | Environment variables, and secret set **names** to inject. |
 | `IdempotencyKey` | Makes the create safe to repeat. Generated and reused across retries if empty. |
 
 `Create` returns once the sandbox is running. A sandbox that failed to start comes back as an `ErrUnavailable` error; retry with a new key.
@@ -210,12 +221,42 @@ A schedule uses exactly one of `CronExpressions`, `IntervalSeconds` or `RunAt`.
 ## Templates
 
 ```go
+tpl, err := client.CreateTemplate(ctx, bonya.TemplateWrite{
+	Name:   "node-dev",
+	Config: &bonya.TemplateConfig{Image: "node:22", CPU: 2, MemoryMiB: 4096},
+})
+tpl, err = client.UpdateTemplate(ctx, tpl.ID, bonya.TemplateWrite{Config: &bonya.TemplateConfig{Image: "node:22", CPU: 4}}) // new revision
 templates, err := client.ListTemplates(ctx)
+err = client.DeleteTemplate(ctx, tpl.ID)
+
+sandbox, err := client.Create(ctx, bonya.CreateOptions{TemplateID: tpl.ID})
 ```
 
-<Note>
-The Go SDK lists templates. To create or edit templates, secrets, secret sets and registry connections, use the [TypeScript](/sdks/typescript/usage) or [Python](/sdks/python/usage) SDK, the CLI, or the REST API.
-</Note>
+## Registry connections, secrets, and secret sets
+
+```go
+conn, err := client.CreateRegistryConnection(ctx, bonya.RegistryConnectionWrite{
+	Name: "ghcr", Registry: "ghcr.io", Username: "me", Password: "<token>",
+})
+digest, err := client.ValidateRegistryConnection(ctx, conn.ID, "ghcr.io/me/app:latest")
+
+_, err = client.CreateSecret(ctx, "DB_PASSWORD", "s3cret")
+_, err = client.CreateSecretSet(ctx, bonya.SecretSetWrite{Name: "app-env", Values: map[string]string{"API_URL": "https://example.com"}})
+
+sandbox, err := client.Create(ctx, bonya.CreateOptions{SecretSets: []string{"app-env"}})
+```
+
+Values are write-only; the API never returns them. Reference secret sets by **name**.
+
+## GPUs and network
+
+```go
+options, err := client.ListGPUOptions(ctx) // empty: no GPU capacity
+err = sandbox.UpdateNetwork(ctx, bonya.NetworkPolicy{
+	Mode:  "allowlist",
+	Allow: []bonya.NetworkRule{{Domain: "pypi.org"}, {CIDR: "10.0.0.0/8"}},
+})
+```
 
 ## Organizations
 
