@@ -15,7 +15,7 @@ Create and manage isolated compute environments.
 
 ### `sandbox_create`
 
-Create a new sandbox (an isolated cloud compute environment) from a template. By default returns immediately with the sandbox in 'creating' state (202); pass wait=true to block until it is ready (201).
+Create a new sandbox (an isolated cloud compute environment) from a template. By default returns immediately with the sandbox in 'creating' state (202); pass wait=true to block until it is ready (201). With template_id: only env and secret_sets may be added (not image, snapshot or network), and pass wait=true so the template's previews are created. To host a website that must come back by itself after a cold pause, use an image template (see the server instructions), not the default template.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -59,11 +59,11 @@ Permanently and synchronously delete a sandbox. Deleting an already-deleted sand
 
 ## Lifecycle, network & GPU
 
-Pause, keep awake (which also wakes a paused sandbox), restrict egress, fork, and see GPU capacity.
+Pause, keep awake on request, restrict egress, fork, and see GPU capacity. A paused sandbox wakes by itself on exec, file access, or preview traffic.
 
 ### `sandbox_pause`
 
-Force a sandbox to pause. 'warm' keeps it quick to resume; 'cold' frees more resources but resumes slower. Returns once the stage is reached. A paused sandbox wakes on sandbox_keepalive, on exec/file access, or on incoming traffic.
+Force a sandbox to pause. 'warm' keeps memory and running processes and resumes quickly; 'cold' frees more resources, resumes slower, and ends every process (files are kept; processes are not restarted). Returns once the stage is reached. A paused sandbox wakes by itself on exec, file access, or preview traffic; sandbox_keepalive is not needed to wake it.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -72,12 +72,12 @@ Force a sandbox to pause. 'warm' keeps it quick to resume; 'cold' frees more res
 
 ### `sandbox_keepalive`
 
-Place an expiring keep-awake hold on a sandbox so it is not auto-paused; a paused sandbox is woken. Returns keepalive_until.
+Place an expiring keep-awake hold on a sandbox so it is not auto-paused; a paused sandbox is woken. Returns keepalive_until. Call this ONLY when the user explicitly asks to keep the sandbox awake, alive, or running. Do not call it by default, after sandbox_create or exec, to wake a sandbox (exec, file access and preview traffic wake it), or on your own to keep a website or server up. A hold keeps the sandbox running and billed for its whole duration.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `sandbox_id` | string | yes | The sandbox id (e.g. as returned by sandbox_create or sandbox_list). |
-| `for` | string | yes | Hold duration as a Go-style duration, e.g. "30m" or "2h". |
+| `for` | string | yes | Hold duration as a Go-style duration, e.g. "30m" or "2h". Use the duration the user asked for; if they gave none, ask them or use a short one and say so. |
 
 ### `sandbox_network_update`
 
@@ -147,7 +147,7 @@ Run buffered commands and work with files.
 
 ### `sandbox_exec`
 
-Run a command in a sandbox and wait for it to finish (buffered, non-interactive). Returns exit code, stdout, and stderr. For long-running or interactive processes, use session_create instead.
+Run a command in a sandbox and wait for it to finish (buffered, non-interactive). Returns exit code, stdout, and stderr. For long-running or interactive processes, use session_create instead. A process started here (including in the background) ends when the sandbox is paused cold and is not restarted.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -231,7 +231,7 @@ Long-lived named background processes.
 
 ### `session_create`
 
-Create a named, long-lived session running a command in a sandbox. Unlike sandbox_exec, the session keeps running in the background; use session_list to check on it and session_kill to stop it. Creating a session with a name that already has a live session fails with session_exists (409) unless replace is set, which replaces a terminal (finished) session of the same name.
+Create a named, long-lived session running a command in a sandbox. Unlike sandbox_exec, the session keeps running in the background; use session_list to check on it and session_kill to stop it. Creating a session with a name that already has a live session fails with session_exists (409) unless replace is set, which replaces a terminal (finished) session of the same name. A session survives a warm pause but ends when the sandbox is paused cold and is not restarted.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -482,7 +482,7 @@ Fetch a template, optionally at a specific revision (default: latest).
 
 ### `template_create`
 
-Create a template from an image and settings. The image is resolved and validated on save; the template starts at revision 1.
+Create a template from an image and settings. The image is resolved and validated on save; the template starts at revision 1. Use one to host a website or app that must come back by itself after a cold pause: its command runs again on every cold wake (recipe in the server instructions). Check template_list first and reuse a matching template instead of creating another.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -654,6 +654,39 @@ _No parameters._
 <Note>
 The API's WebSocket endpoints (TTY `exec` and session `attach`) are not exposed as tools — they don't fit a request/response MCP tool. `sandbox_exec` covers non-interactive commands through the buffered `POST .../exec` endpoint, and `session_create` covers long-running background processes. Identity management (creating organizations, members, invites and API keys) is not available to API keys and is not exposed.
 </Note>
+
+## Hosting a website or app
+
+A server started with `session_create` or `sandbox_exec` stays down after a cold pause, so its preview URL then fails. An **image template's `command` runs again on every cold wake**, so a site hosted this way comes back by itself when its preview URL is opened, with no agent call and no `sandbox_keepalive`. The server sends this recipe to agents in its MCP instructions.
+
+1. Create a template once (reuse it from `template_list` afterwards):
+
+   ```json
+   {
+     "name": "web-app-node",
+     "config": {
+       "image": "node:22-bookworm-slim",
+       "command": ["sh", "-c", "while [ ! -x /app/start.sh ]; do sleep 2; done; exec /app/start.sh"],
+       "previews": [{ "port": 3000, "visibility": "public" }]
+     }
+   }
+   ```
+
+2. Create the sandbox with `wait: true`, or the template's previews are not created:
+
+   ```json
+   { "template_id": "<id>", "name": "my-site", "wait": true }
+   ```
+
+3. Write the app under `/app` (`fs_mkdir`, `fs_write`, `sandbox_exec` for installs), then an `/app/start.sh` that runs the server in the foreground on `0.0.0.0:3000` (`#!/bin/sh`, `cd /app && exec node server.js`). Run `chmod +x` on it last; the template command starts it within about 2 seconds.
+4. Share the preview URL from `preview_list`.
+
+Limits:
+
+- The first request after a cold wake may fail while the server starts; a reload works.
+- A running server counts as activity, so the sandbox stays awake until the plan's max awake time or a manual pause.
+- A server that exits while the sandbox runs is restarted only at the next cold wake.
+- The default template (no `template_id`) has no start-on-wake.
 
 ## Gotchas
 
