@@ -2,6 +2,12 @@
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
   "name": "Bonya",
+  "logo": {
+    "light": "/images/logo-light.svg",
+    "dark": "/images/logo-dark.svg",
+    "href": "https://bonya.ai"
+  },
+  "favicon": "/images/favicon.svg",
   "colors": {
     "primary": "#16A34A",
     "light": "#07C983",
