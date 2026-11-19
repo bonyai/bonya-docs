@@ -7,7 +7,10 @@
     "dark": "/images/logo-dark.svg",
     "href": "https://bonya.ai"
   },
-  "favicon": "/images/favicon.svg",
+  "favicon": {
+    "light": "/images/bonya-b.svg",
+    "dark": "/images/bonya-b.svg"
+  },
   "colors": {
     "primary": "#16A34A",
     "light": "#07C983",
